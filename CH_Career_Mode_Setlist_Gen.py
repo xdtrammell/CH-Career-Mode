@@ -8,12 +8,13 @@ import random, time
 import configparser
 import struct
 import math
+import re
 
 from PySide6.QtCore import Qt, QSize, QObject, Signal, QThread, QSettings
 from PySide6.QtWidgets import (
     QApplication, QWidget, QMainWindow, QFileDialog, QListWidget, QListWidgetItem,
     QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox, QCheckBox, QLineEdit,
-    QGroupBox, QFormLayout, QMessageBox, QScrollArea, QComboBox, QProgressDialog, QStyledItemDelegate, QAbstractItemView, QGridLayout, QSizePolicy
+    QGroupBox, QFormLayout, QMessageBox, QScrollArea, QComboBox, QProgressDialog, QStyledItemDelegate, QAbstractItemView, QGridLayout, QSizePolicy, QStyle
 )
 
 # -----------------------------
@@ -31,6 +32,11 @@ class Song:
     chart_path: Optional[str]
     chart_md5: Optional[str]
     score: float
+
+    def __post_init__(self) -> None:
+        self.name = strip_color_tags(self.name)
+        self.artist = strip_color_tags(self.artist)
+        self.charter = strip_color_tags(self.charter)
 
 
 # -----------------------------
@@ -119,6 +125,14 @@ def md5_file(path: str) -> str:
             h.update(chunk)
     return h.hexdigest().upper()
 
+
+COLOR_TAG_RE = re.compile(r'</?color\b[^>]*>', re.IGNORECASE)
+
+def strip_color_tags(text: Optional[str]) -> str:
+    """Remove Clone Hero-style <color=...> tags from song metadata."""
+    if not text:
+        return ""
+    return COLOR_TAG_RE.sub('', text).strip()
 
 def difficulty_score(diff_guitar: Optional[int], length_ms: Optional[int]) -> float:
     base = 0.0 if diff_guitar is None else max(0, min(9, int(diff_guitar))) / 9.0 * 100.0
@@ -209,9 +223,9 @@ class ScanWorker(QObject):
                 if row2:
                     s = Song(
                         path=ini_path,
-                        name=row2[0] or "",
-                        artist=row2[1] or "",
-                        charter=row2[2] or "",
+                        name=strip_color_tags(row2[0]),
+                        artist=strip_color_tags(row2[1]),
+                        charter=strip_color_tags(row2[2]),
                         length_ms=row2[3],
                         diff_guitar=row2[4],
                         is_very_long=bool(row2[5]),
@@ -228,9 +242,10 @@ class ScanWorker(QObject):
             if not data:
                 continue
 
-            name = data.get("name", os.path.basename(dirpath))
-            artist = data.get("artist", "")
-            charter = data.get("charter", "")
+            raw_name = data.get("name")
+            name = strip_color_tags(raw_name if raw_name else os.path.basename(dirpath))
+            artist = strip_color_tags(data.get("artist"))
+            charter = strip_color_tags(data.get("charter"))
 
             try:
                 length_ms = int(float(data.get("song_length", "0")))
@@ -417,13 +432,69 @@ GH_TIER_NAMES = [
 ]
 
 TIER_COLUMNS = 3
+TIER_COLUMN_SPACING = 8
+MAIN_LAYOUT_MARGIN = 8
+MAIN_LAYOUT_SPACING = 12
+LIBRARY_MIN_WIDTH = 300
+SETTINGS_MIN_WIDTH = 280
+TIER_COLUMN_MIN_WIDTH = 240
+TIER_LIST_EXTRA_PADDING = 8
+WINDOW_MIN_HEIGHT = 760
+WINDOW_MIN_WIDTH = (
+    LIBRARY_MIN_WIDTH
+    + SETTINGS_MIN_WIDTH
+    + TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
+    + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+    + 2 * MAIN_LAYOUT_SPACING
+    + 2 * MAIN_LAYOUT_MARGIN
+)
+DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
 
 
 
 
+THEME_SETS = {
+    "Guitar Hero - Classic Venue Names": GH_TIER_NAMES,
+    "Guitar Hero (2005) - Career Sets": [
+        "Opening Licks",
+        "Axe-Grinders",
+        "Thrash and Burn",
+        "Return of the Shred",
+        "Relentless Riffs",
+        "Furious Fretwork",
+        "Face-Melters",
+    ],
+    "Guitar Hero II - Career Sets": [
+        "Opening Licks",
+        "Amp-Warmers",
+        "String Snappers",
+        "Thrash and Burn",
+        "Return of the Shred",
+        "Relentless Riffs",
+        "Furious Fretwork",
+        "Face-Melters",
+    ],
+}
+
+PROCEDURAL_ADJS = [
+    "Backroom", "Basement", "Neon", "Touring", "Midnight", "Electric", "Thunder",
+    "Retro", "Steel", "Crimson", "Golden", "Wild", "Loud", "Feral", "Wired",
+]
+PROCEDURAL_NOUNS = [
+    "Licks", "Amp Warmers", "Riff Run", "Shred Set", "Encore", "Stage Lights",
+    "Roadshow", "Soundcheck", "Headliners", "Pit Crew", "Afterparty", "Finale",
+]
+
+def _procedural_name(i: int) -> str:
+    a = PROCEDURAL_ADJS[i % len(PROCEDURAL_ADJS)]
+    n = PROCEDURAL_NOUNS[i % len(PROCEDURAL_NOUNS)]
+    return f"{a} {n}"
 def tier_name_for(i: int, theme: str) -> str:
-    if "Guitar Hero" in theme:
-        return GH_TIER_NAMES[i] if i < len(GH_TIER_NAMES) else f"Tier {i+1}"
+    names = THEME_SETS.get(theme)
+    if names:
+        return names[i] if i < len(names) else f"Tier {i+1}"
+    if theme and theme.lower().startswith('procedural'):
+        return _procedural_name(i)
     return f"Tier {i+1}"
 
 
@@ -463,8 +534,15 @@ class TierList(QListWidget):
         self.setDragEnabled(True)
         self.setDragDropMode(QListWidget.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
-        self.setMinimumWidth(200)
+        inner_min = max(200, TIER_COLUMN_MIN_WIDTH - 16)
+        self.setMinimumWidth(inner_min)
         self.title = title
+        self.title_label: Optional[QLabel] = None
+
+    def set_title(self, title: str) -> None:
+        self.title = title
+        if self.title_label is not None:
+            self.title_label.setText(title)
 
     def sizeHint(self):
         return QSize(220, 360)
@@ -474,7 +552,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
-        self.resize(1280, 760)
+        self.resize(DEFAULT_WINDOW_SIZE)
 
         self.settings = QSettings("CHCareer", "Builder")
 
@@ -482,6 +560,8 @@ class MainWindow(QMainWindow):
         self.tiers_widgets: List[TierList] = []
         self.tier_wrappers: List[QWidget] = []
         self._list_delegates: List[CompactItemDelegate] = []
+        self.current_tier_names: List[str] = []
+        self._procedural_seed = None
 
         # Controls
         self.btn_pick = QPushButton("Pick Songs Folder...")
@@ -499,7 +579,12 @@ class MainWindow(QMainWindow):
         self.spin_songs_per = QSpinBox(); self.spin_songs_per.setRange(1, 10); self.spin_songs_per.setValue(5)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
 
-        self.theme_combo = QComboBox(); self.theme_combo.addItems(["Guitar Hero - Classic Venue Names", "None (Custom Tier Names)"])
+        self.theme_combo = QComboBox(); self.theme_combo.addItems(["None (Custom Tier Names)"] + list(THEME_SETS.keys()) + ["Procedural - Rock Tour"])
+        saved_theme = self.settings.value("tier_theme", "Procedural - Rock Tour", type=str)
+        available_themes = [self.theme_combo.itemText(i) for i in range(self.theme_combo.count())]
+        if saved_theme not in available_themes:
+            saved_theme = "Procedural - Rock Tour"
+        self.theme_combo.setCurrentText(saved_theme)
 
         # Left: Library list
         self.lib_list = QListWidget(); self.lib_list.setSelectionMode(QListWidget.ExtendedSelection)
@@ -511,8 +596,8 @@ class MainWindow(QMainWindow):
         self.tiers_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.tiers_layout = QGridLayout(self.tiers_container)
         self.tiers_layout.setContentsMargins(0, 0, 0, 0)
-        self.tiers_layout.setHorizontalSpacing(8)
-        self.tiers_layout.setVerticalSpacing(8)
+        self.tiers_layout.setHorizontalSpacing(TIER_COLUMN_SPACING)
+        self.tiers_layout.setVerticalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setAlignment(Qt.AlignTop)
 
         self.tiers_scroll = QScrollArea()
@@ -521,11 +606,12 @@ class MainWindow(QMainWindow):
         self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.tiers_scroll.setWidget(self.tiers_container)
 
+        self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
 
         # Right: Settings
-        settings_box = QGroupBox("Settings")
-        form = QFormLayout(settings_box)
+        self.settings_box = QGroupBox("Settings")
+        form = QFormLayout(self.settings_box)
 
         form.setSpacing(6)
         form.setContentsMargins(8, 8, 8, 8)
@@ -541,8 +627,9 @@ class MainWindow(QMainWindow):
         # Layout
         central = QWidget(); self.setCentralWidget(central)
         h = QHBoxLayout(central)
-        h.setContentsMargins(8, 8, 8, 8)
-        h.setSpacing(12)
+        h.setContentsMargins(MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN)
+        h.setSpacing(MAIN_LAYOUT_SPACING)
+        self.main_layout = h
 
         left_box = QVBoxLayout()
         left_box.setContentsMargins(0, 0, 0, 0)
@@ -556,24 +643,107 @@ class MainWindow(QMainWindow):
 
         h.addLayout(left_box, 2)
         h.addWidget(self.tiers_scroll, 3)
-        h.addWidget(settings_box, 1)
+        h.addWidget(self.settings_box, 1)
+
+        self._update_size_constraints()
 
         # Events
         self.btn_pick.clicked.connect(self.pick_folder)
         self.btn_scan.clicked.connect(self.scan_now)
         self.btn_auto.clicked.connect(self.auto_arrange)
         self.btn_export.clicked.connect(self.export_now)
-        self.spin_tiers.valueChanged.connect(self._rebuild_tier_widgets)
+        self.spin_tiers.valueChanged.connect(self._on_tier_count_changed)
         self.search_box.textChanged.connect(self._refresh_library_view)
+        self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
 
         # Restore last root
         self.root_folder: Optional[str] = self.settings.value("root_folder", None, type=str)
+
+    def _update_size_constraints(self) -> None:
+        """Ensure the window is wide enough to show all columns."""
+        self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
+        self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
+
+        tiers_min_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+        self.tiers_scroll.setMinimumWidth(tiers_min_width)
+
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+        target_width = max(self.width(), WINDOW_MIN_WIDTH)
+        target_height = max(self.height(), WINDOW_MIN_HEIGHT)
+        if target_width != self.width() or target_height != self.height():
+            self.resize(target_width, target_height)
+
+
+    def _is_procedural_theme(self) -> bool:
+        theme = self.theme_combo.currentText() if hasattr(self, 'theme_combo') else ''
+        return bool(theme) and theme.lower().startswith('procedural')
+
+    def _generate_procedural_names(self, count: int) -> List[str]:
+        combos = [f'{adj} {noun}' for adj in PROCEDURAL_ADJS for noun in PROCEDURAL_NOUNS]
+        if not combos:
+            return [f'Tier {i+1}' for i in range(count)]
+        seed = time.time_ns()
+        rnd = random.Random(seed)
+        self._procedural_seed = seed
+        if count <= len(combos):
+            return rnd.sample(combos, count)
+        rnd.shuffle(combos)
+        selected: List[str] = []
+        pool = combos.copy()
+        while len(selected) < count:
+            if not pool:
+                pool = combos.copy()
+                rnd.shuffle(pool)
+            name = pool.pop()
+            if name in selected:
+                dup = sum(1 for n in selected if n.startswith(name)) + 1
+                name = f'{name} #{dup}'
+            selected.append(name)
+        return selected
+
+    def _regenerate_tier_names(self, procedural_refresh: bool = False) -> None:
+        count = self.spin_tiers.value() if hasattr(self, 'spin_tiers') else 0
+        theme = self.theme_combo.currentText() if hasattr(self, 'theme_combo') else ''
+        if theme == 'None (Custom Tier Names)':
+            names = [f'Tier {i+1}' for i in range(count)]
+        elif theme in THEME_SETS:
+            base = THEME_SETS[theme]
+            names = [base[i] if i < len(base) else f'Tier {i+1}' for i in range(count)]
+        elif theme and theme.lower().startswith('procedural'):
+            if procedural_refresh or len(self.current_tier_names) != count:
+                names = self._generate_procedural_names(count)
+            else:
+                names = self.current_tier_names[:count]
+        else:
+            names = [f'Tier {i+1}' for i in range(count)]
+        self.current_tier_names = names
+
+    def _update_tier_titles(self) -> None:
+        for idx, tier in enumerate(self.tiers_widgets):
+            tier.set_title(self._tier_name(idx))
+
+    def _tier_name(self, idx: int) -> str:
+        if 0 <= idx < len(self.current_tier_names):
+            return self.current_tier_names[idx]
+        theme = self.theme_combo.currentText() if hasattr(self, 'theme_combo') else ''
+        return tier_name_for(idx, theme)
+
+    def _on_theme_changed(self, theme: str) -> None:
+        self.settings.setValue('tier_theme', theme)
+        self._regenerate_tier_names(procedural_refresh=True)
+        self._update_tier_titles()
+        self._update_size_constraints()
+
+    def _on_tier_count_changed(self, value: int) -> None:
+        self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
+        self._rebuild_tier_widgets()
 
     # ---------- UI helpers ----------
     def _apply_compact_list_style(self, widget: QListWidget) -> CompactItemDelegate:
         widget.setStyleSheet(COMPACT_LIST_STYLE)
         widget.setSpacing(1)
         widget.setUniformItemSizes(True)
+        widget.setSizeAdjustPolicy(QAbstractItemView.AdjustToContents)
         widget.setWordWrap(False)
         widget.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         widget.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
@@ -584,6 +754,7 @@ class MainWindow(QMainWindow):
 
     def _rebuild_tier_widgets(self):
         self._list_delegates = self._list_delegates[:1]
+        self._regenerate_tier_names()
         self.tiers_widgets.clear()
         self.tier_wrappers.clear()
 
@@ -596,7 +767,7 @@ class MainWindow(QMainWindow):
         cols = TIER_COLUMNS
         tier_count = self.spin_tiers.value()
         for idx in range(tier_count):
-            tier = TierList(f"Tier {idx + 1}")
+            tier = TierList(self._tier_name(idx))
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
             self._list_delegates.append(self._apply_compact_list_style(tier))
 
@@ -624,6 +795,9 @@ class MainWindow(QMainWindow):
                 self.tiers_layout.addWidget(spacer, row, col)
 
         self._sync_all_tier_heights()
+        self._update_tier_titles()
+        if hasattr(self, "settings_box"):
+            self._update_size_constraints()
 
     def _create_tier_panel(self, tier: TierList) -> QWidget:
         panel = QWidget()
@@ -636,6 +810,7 @@ class MainWindow(QMainWindow):
         title.setAlignment(Qt.AlignHCenter)
         title.setStyleSheet('font-weight: bold;')
         layout.addWidget(title)
+        tier.title_label = title
 
         tier.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tier.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -653,16 +828,27 @@ class MainWindow(QMainWindow):
     def _tier_height_for(self, tier: QListWidget, rows: int) -> int:
         if rows <= 0:
             rows = 1
-        if tier.count():
-            row_height = tier.sizeHintForRow(0)
-        elif self.lib_list.count():
+
+        delegate = tier.itemDelegate()
+        row_height = tier.sizeHintForRow(0) if tier.count() else 0
+        if row_height <= 0 and hasattr(delegate, 'vertical_padding'):
+            row_height = tier.fontMetrics().height() + delegate.vertical_padding * 2
+        if row_height <= 0 and self.lib_list.count():
             row_height = self.lib_list.sizeHintForRow(0)
-        else:
-            row_height = tier.fontMetrics().height() + 4
+        if row_height <= 0:
+            row_height = tier.fontMetrics().height() + 6
+
         spacing = tier.spacing()
         frame = tier.frameWidth() * 2
+        style_margin = tier.style().pixelMetric(QStyle.PM_FocusFrameVMargin, None, tier)
         total_rows = rows
-        return total_rows * row_height + max(0, total_rows - 1) * spacing + frame + 2
+        return (
+            total_rows * row_height
+            + max(0, total_rows - 1) * spacing
+            + frame
+            + style_margin * 2
+            + TIER_LIST_EXTRA_PADDING
+        )
 
     def _sync_all_tier_heights(self) -> None:
         for tier in self.tiers_widgets:
@@ -698,15 +884,19 @@ class MainWindow(QMainWindow):
         else:
             length_str = None
 
-        artist_segment = f" - {song.artist}" if song.artist else ""
+        display_name = strip_color_tags(song.name)
+        display_artist = strip_color_tags(song.artist)
+        display_charter = strip_color_tags(song.charter)
+
+        artist_segment = f" - {display_artist}" if display_artist else ""
         length_segment = f" [{length_str}]" if length_str else ""
-        item = QListWidgetItem(f"{song.name}{artist_segment}{length_segment}")
+        item = QListWidgetItem(f"{display_name}{artist_segment}{length_segment}")
 
         details = []
-        if song.artist:
-            details.append(f"Artist: {song.artist}")
-        if song.charter:
-            details.append(f"Charter: {song.charter}")
+        if display_artist:
+            details.append(f"Artist: {display_artist}")
+        if display_charter:
+            details.append(f"Charter: {display_charter}")
         difficulty_text = f"D{song.diff_guitar}" if song.diff_guitar is not None else "Unknown"
         details.append(f"Difficulty: {difficulty_text}")
         details.append(f"Score: {int(song.score)}")
@@ -776,6 +966,8 @@ class MainWindow(QMainWindow):
             return
         n_tiers = self.spin_tiers.value()
         songs_per = self.spin_songs_per.value()
+        self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
+
         tiers = auto_tier(
             self.library,
             n_tiers,
@@ -790,6 +982,7 @@ class MainWindow(QMainWindow):
                 item = self._build_song_item(s)
                 w.addItem(item)
             self._sync_tier_height(w)
+        self._update_tier_titles()
         self._sync_all_tier_heights()
 
     def export_now(self):
@@ -844,7 +1037,7 @@ class MainWindow(QMainWindow):
         for idx, songs in enumerate(tiers_songs):
             if not songs:
                 continue
-            name = tier_name_for(idx, theme)
+            name = self._tier_name(idx)
             fname = f"{idx+1:02d} - {name}.setlist"
             path = os.path.join(out_dir, fname)
             if os.path.exists(path):
@@ -869,6 +1062,4 @@ if __name__ == "__main__":
     win = MainWindow()
     win.show()
     sys.exit(app.exec())
-
-
 
