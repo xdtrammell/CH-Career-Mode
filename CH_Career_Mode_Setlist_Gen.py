@@ -978,7 +978,15 @@ class MainWindow(QMainWindow):
         )
         for i, w in enumerate(self.tiers_widgets):
             w.clear()
-            for s in tiers[i]:
+            tier_songs = sorted(
+                tiers[i],
+                key=lambda song: (
+                    song.score,
+                    song.length_ms if song.length_ms is not None else float('inf'),
+                    song.name.lower(),
+                ),
+            )
+            for s in tier_songs:
                 item = self._build_song_item(s)
                 w.addItem(item)
             self._sync_tier_height(w)
