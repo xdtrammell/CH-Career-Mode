@@ -200,6 +200,11 @@ class MainWindow(QMainWindow):
 
         self.settings = QSettings("CHCareer", "Builder")
 
+        saved_root = self.settings.value("root_folder", None, type=str)
+        self.root_folder: Optional[str] = saved_root if saved_root and os.path.isdir(saved_root) else None
+        if saved_root and not self.root_folder:
+            self.settings.remove("root_folder")
+
         self.library: List[Song] = []
         self.tiers_widgets: List[TierList] = []
         self.tier_wrappers: List[QWidget] = []
@@ -224,6 +229,11 @@ class MainWindow(QMainWindow):
         self.chk_longrule.setChecked(True)
         self.chk_artistlimit = QCheckBox("Max 1 per artist per tier")
         self.chk_artistlimit.setChecked(True)
+
+        self.folder_status_indicator = QLabel()
+        self.folder_status_indicator.setFixedSize(12, 12)
+        self.folder_status_label = QLabel("(none)")
+        self.folder_status_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
         self.spin_tiers = QSpinBox()
         self.spin_tiers.setRange(1, 20)
@@ -269,6 +279,15 @@ class MainWindow(QMainWindow):
         form.setSpacing(6)
         form.setContentsMargins(8, 8, 8, 8)
         form.addRow(self.btn_pick, self.btn_scan)
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(6)
+        status_widget = QWidget()
+        status_widget.setLayout(status_row)
+        status_row.addWidget(self.folder_status_indicator)
+        status_row.addWidget(self.folder_status_label, 1)
+        form.addRow(status_widget)
+        self._update_folder_status()
         form.addRow(QLabel("Tiers:"), self.spin_tiers)
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
         form.addRow(self.chk_artistlimit)
@@ -369,6 +388,18 @@ class MainWindow(QMainWindow):
             names = [f"Tier {i+1}" for i in range(count)]
         self.current_tier_names = names
 
+    def _update_folder_status(self) -> None:
+        valid_path = self.root_folder if self.root_folder and os.path.isdir(self.root_folder) else None
+        color = "#3CC13B" if valid_path else "#D9534F"
+        self.folder_status_indicator.setStyleSheet(
+            f"background-color: {color}; border: 1px solid #222; border-radius: 6px;"
+        )
+        display_text = valid_path or "(none)"
+        metrics = self.folder_status_label.fontMetrics()
+        elided = metrics.elidedText(display_text, Qt.ElideMiddle, 260)
+        self.folder_status_label.setText(elided)
+        self.folder_status_label.setToolTip(display_text)
+    
     def _update_tier_titles(self) -> None:
         for idx, tier in enumerate(self.tiers_widgets):
             tier.set_title(self._tier_name(idx))
@@ -550,13 +581,18 @@ class MainWindow(QMainWindow):
             self.lib_list.addItem(item)
 
     def pick_folder(self) -> None:
-        d = QFileDialog.getExistingDirectory(self, "Pick top-level Clone Hero songs root")
+        initial_dir = self.root_folder if self.root_folder and os.path.isdir(self.root_folder) else os.path.expanduser("~")
+        d = QFileDialog.getExistingDirectory(self, "Pick top-level Clone Hero songs root", initial_dir)
         if d:
             self.root_folder = d
             self.settings.setValue("root_folder", d)
+            self._update_folder_status()
 
     def scan_now(self) -> None:
-        if not self.root_folder:
+        if not self.root_folder or not os.path.isdir(self.root_folder):
+            self.root_folder = None
+            self.settings.remove("root_folder")
+            self._update_folder_status()
             QMessageBox.warning(self, "No folder", "Please pick your TOP-LEVEL songs folder first.")
             return
 
@@ -702,4 +738,3 @@ class MainWindow(QMainWindow):
             "Export complete",
             f"Wrote {written} tier .setlist file(s) to:\n{out_dir}\nTotal songs: {total_songs}",
         )
-
