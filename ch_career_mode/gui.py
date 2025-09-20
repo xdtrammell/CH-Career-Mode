@@ -37,6 +37,17 @@ from .scanner import ScanWorker
 from .tiering import auto_tier
 from .exporter import export_setlist_binary, read_setlist_md5s
 
+MEME_GENRES = {
+    "meme",
+    "memes",
+    "heavy memes",
+    "meme mashup",
+    "nu-disco meme",
+    "drum & bass meme",
+}
+
+
+
 
 GH_TIER_NAMES = [
     "Local Gig",
@@ -265,6 +276,13 @@ class MainWindow(QMainWindow):
         self.chk_longrule.setChecked(True)
         self.chk_artistlimit = QCheckBox("Max 1 per artist per tier")
         self.chk_artistlimit.setChecked(True)
+        exclude_memes_setting = bool(self.settings.value("exclude_memes", False, type=bool))
+        self.chk_exclude_meme = QCheckBox("Exclude meme songs")
+        self.chk_exclude_meme.setChecked(exclude_memes_setting)
+        self.spin_min_diff = QSpinBox()
+        self.spin_min_diff.setRange(1, 5)
+        saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
+        self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
 
         self.folder_status_indicator = QLabel()
         self.folder_status_indicator.setFixedSize(12, 12)
@@ -336,6 +354,8 @@ class MainWindow(QMainWindow):
         form.addRow(self.chk_artistlimit)
         form.addRow(self.chk_longrule)
         form.addRow(self.chk_group_genre)
+        form.addRow(self.chk_exclude_meme)
+        form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
         form.addRow(QLabel("Theme:"), self.theme_combo)
         form.addRow(self.btn_auto, self.btn_export)
 
@@ -373,6 +393,8 @@ class MainWindow(QMainWindow):
         self.search_box.textChanged.connect(self._refresh_library_view)
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
+        self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
     def _update_size_constraints(self) -> None:
         if hasattr(self, 'lib_list'):
@@ -464,6 +486,14 @@ class MainWindow(QMainWindow):
     def _on_group_genre_changed(self, state: int) -> None:
         self.settings.setValue("group_by_genre", state == Qt.Checked)
         self.settings.sync()
+
+    def _on_exclude_meme_changed(self, state: int) -> None:
+        self.settings.setValue("exclude_memes", state == Qt.Checked)
+        self._refresh_library_view()
+
+    def _on_min_difficulty_changed(self, value: int) -> None:
+        self.settings.setValue("min_difficulty", value)
+        self._refresh_library_view()
 
     def _on_tier_count_changed(self, value: int) -> None:
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
@@ -591,6 +621,10 @@ class MainWindow(QMainWindow):
 
     def _handle_library_drop(self, tier_widget: TierList, songs: List[Song]) -> None:
         for song in songs:
+            if (song.diff_guitar or 0) < self.spin_min_diff.value():
+                continue
+            if self.chk_exclude_meme.isChecked() and (song.genre or "").strip().lower() in MEME_GENRES:
+                continue
             item = self._build_song_item(song)
             tier_widget.addItem(item)
         self._sync_tier_height(tier_widget)
@@ -632,8 +666,14 @@ class MainWindow(QMainWindow):
 
     def _refresh_library_view(self) -> None:
         q = self.search_box.text().lower().strip()
+        min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
+        exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
         self.lib_list.clear()
         for s in sorted(self.library, key=lambda s: (s.score, s.name.lower())):
+            if (s.diff_guitar or 0) < min_diff:
+                continue
+            if exclude_memes and (s.genre or "").strip().lower() in MEME_GENRES:
+                continue
             if q and q not in s.name.lower() and q not in s.artist.lower() and q not in s.charter.lower():
                 continue
             item = self._build_song_item(s)
@@ -691,8 +731,15 @@ class MainWindow(QMainWindow):
         songs_per = self.spin_songs_per.value()
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
 
+        min_diff = self.spin_min_diff.value()
+        exclude_memes = self.chk_exclude_meme.isChecked()
+        songs = [s for s in self.library if (s.diff_guitar or 0) >= min_diff and (not exclude_memes or (s.genre or "").strip().lower() not in MEME_GENRES)]
+        if not songs:
+            QMessageBox.warning(self, "No songs meet criteria", "Lower the minimum difficulty, allow meme songs, or scan more songs.")
+            return
+
         tiers = auto_tier(
-            self.library,
+            songs,
             n_tiers,
             songs_per,
             enforce_artist_limit=self.chk_artistlimit.isChecked(),
@@ -798,3 +845,4 @@ class MainWindow(QMainWindow):
             "Export complete",
             f"Wrote {written} tier .setlist file(s) to:\n{out_dir}\nTotal songs: {total_songs}",
         )
+
