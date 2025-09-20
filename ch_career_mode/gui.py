@@ -274,15 +274,18 @@ class MainWindow(QMainWindow):
         self.diff_max.setValue(9)
         self.chk_longrule = QCheckBox("Keep >7:00 out of first two tiers")
         self.chk_longrule.setChecked(True)
-        self.chk_artistlimit = QCheckBox("Max 1 per artist per tier")
-        self.chk_artistlimit.setChecked(True)
         exclude_memes_setting = bool(self.settings.value("exclude_memes", False, type=bool))
         self.chk_exclude_meme = QCheckBox("Exclude meme songs")
         self.chk_exclude_meme.setChecked(exclude_memes_setting)
+        saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
+        self.spin_artist_limit = QSpinBox()
+        self.spin_artist_limit.setRange(1, 10)
+        self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
         self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
+
 
         self.folder_status_indicator = QLabel()
         self.folder_status_indicator.setFixedSize(12, 12)
@@ -351,10 +354,10 @@ class MainWindow(QMainWindow):
         self._update_folder_status()
         form.addRow(QLabel("Tiers:"), self.spin_tiers)
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
-        form.addRow(self.chk_artistlimit)
         form.addRow(self.chk_longrule)
         form.addRow(self.chk_group_genre)
         form.addRow(self.chk_exclude_meme)
+        form.addRow(QLabel("Max tracks by artist per tier:"), self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
         form.addRow(QLabel("Theme:"), self.theme_combo)
         form.addRow(self.btn_auto, self.btn_export)
@@ -394,6 +397,7 @@ class MainWindow(QMainWindow):
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
     def _update_size_constraints(self) -> None:
@@ -489,6 +493,10 @@ class MainWindow(QMainWindow):
 
     def _on_exclude_meme_changed(self, state: int) -> None:
         self.settings.setValue("exclude_memes", state == Qt.Checked)
+        self._refresh_library_view()
+
+    def _on_artist_limit_changed(self, value: int) -> None:
+        self.settings.setValue("artist_limit", value)
         self._refresh_library_view()
 
     def _on_min_difficulty_changed(self, value: int) -> None:
@@ -742,7 +750,7 @@ class MainWindow(QMainWindow):
             songs,
             n_tiers,
             songs_per,
-            enforce_artist_limit=self.chk_artistlimit.isChecked(),
+            max_tracks_per_artist=self.spin_artist_limit.value(),
             keep_very_long_out_of_first_two=self.chk_longrule.isChecked(),
             shuffle_seed=None,
             group_by_genre=self.chk_group_genre.isChecked(),
@@ -845,4 +853,5 @@ class MainWindow(QMainWindow):
             "Export complete",
             f"Wrote {written} tier .setlist file(s) to:\n{out_dir}\nTotal songs: {total_songs}",
         )
+
 

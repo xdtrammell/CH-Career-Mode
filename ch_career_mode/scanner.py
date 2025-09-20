@@ -1,7 +1,7 @@
 import configparser
 import os
 import sqlite3
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from PySide6.QtCore import QObject, Signal
 
@@ -134,6 +134,7 @@ class ScanWorker(QObject):
         total_dirs = sum(1 for _ in os.walk(self.root))
         processed_dirs = 0
         results: List[Song] = []
+        seen_md5: Set[str] = set()
 
         for dirpath, dirnames, filenames in os.walk(self.root):
             if self._stop:
@@ -185,8 +186,13 @@ class ScanWorker(QObject):
                         chart_md5=row2[8],
                         score=row2[9] or 0.0,
                     )
+                    chart_md5 = (s.chart_md5 or "").strip()
+                    if chart_md5 and chart_md5 in seen_md5:
+                        continue
                     if s.diff_guitar is not None and s.diff_guitar >= 1:
                         results.append(s)
+                        if chart_md5:
+                            seen_md5.add(chart_md5)
                     continue
 
             data = read_song_ini(ini_path)
@@ -233,7 +239,12 @@ class ScanWorker(QObject):
                 score=score,
                 genre=genre,
             )
-            results.append(s)
+            duplicate_md5 = chart_md5.strip() if chart_md5 else ""
+            include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
+            if include_song and diff_guitar is not None and diff_guitar >= 1:
+                results.append(s)
+                if duplicate_md5:
+                    seen_md5.add(duplicate_md5)
 
             cur.execute(
                 "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -257,3 +268,4 @@ class ScanWorker(QObject):
         conn.close()
         self.progress.emit(100)
         self.done.emit(results)
+

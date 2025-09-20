@@ -2,7 +2,7 @@ import random
 import time
 import re
 import math
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Set
 
 from .core import Song
 
@@ -137,12 +137,23 @@ def auto_tier(
     songs: List[Song],
     n_tiers: int,
     songs_per_tier: int,
-    enforce_artist_limit: bool = True,
+    max_tracks_per_artist: int = 1,
     keep_very_long_out_of_first_two: bool = True,
     shuffle_seed: Optional[int] = None,
     group_by_genre: bool = False,
 ) -> List[List[Song]]:
     rnd = random.Random(shuffle_seed if shuffle_seed is not None else time.time_ns())
+    seen_md5: Set[str] = set()
+    deduped: List[Song] = []
+    for song in songs:
+        md5 = (song.chart_md5 or "").strip()
+        if md5 and md5 in seen_md5:
+            continue
+        deduped.append(song)
+        if md5:
+            seen_md5.add(md5)
+    songs = deduped
+
     if not songs:
         return [[] for _ in range(n_tiers)]
     if group_by_genre:
@@ -150,7 +161,7 @@ def auto_tier(
             songs,
             n_tiers,
             songs_per_tier,
-            enforce_artist_limit,
+            max_tracks_per_artist,
             keep_very_long_out_of_first_two,
             rnd,
         )
@@ -159,7 +170,7 @@ def auto_tier(
             songs,
             n_tiers,
             songs_per_tier,
-            enforce_artist_limit,
+            max_tracks_per_artist,
             keep_very_long_out_of_first_two,
             rnd,
         )
@@ -170,7 +181,7 @@ def _auto_tier_standard(
     songs: List[Song],
     n_tiers: int,
     songs_per_tier: int,
-    enforce_artist_limit: bool,
+    max_tracks_per_artist: int,
     keep_very_long_out_of_first_two: bool,
     rnd: random.Random,
 ) -> List[List[Song]]:
@@ -192,12 +203,10 @@ def _auto_tier_standard(
                     break
                 if keep_very_long_out_of_first_two and ti < 2 and song.is_very_long:
                     continue
-                if enforce_artist_limit:
-                    key = _artist_key(song)
-                    if key and artist_counts.get(key, 0) >= 1:
-                        continue
-                picks.append(song)
                 key = _artist_key(song)
+                if max_tracks_per_artist > 0 and key and artist_counts.get(key, 0) >= max_tracks_per_artist:
+                    continue
+                picks.append(song)
                 if key:
                     artist_counts[key] = artist_counts.get(key, 0) + 1
 
@@ -304,7 +313,7 @@ def _auto_tier_by_genre(
     songs: List[Song],
     n_tiers: int,
     songs_per_tier: int,
-    enforce_artist_limit: bool,
+    max_tracks_per_artist: int,
     keep_very_long_out_of_first_two: bool,
     rnd: random.Random,
 ) -> List[List[Song]]:
@@ -378,7 +387,7 @@ def _auto_tier_by_genre(
                 if keep_very_long_out_of_first_two and ti < 2 and song.is_very_long:
                     continue
                 key = _artist_key(song)
-                if allow_artist_limit and enforce_artist_limit and key and artist_counts.get(key, 0) >= 1:
+                if allow_artist_limit and max_tracks_per_artist > 0 and key and artist_counts.get(key, 0) >= max_tracks_per_artist:
                     continue
                 pool.remove(song)
                 picks.append(song)
@@ -447,3 +456,4 @@ def _auto_tier_by_genre(
         tiers[ti] = sorted(picks[:songs_per_tier], key=lambda s: (s.score, s.name.lower()))
 
     return tiers
+
