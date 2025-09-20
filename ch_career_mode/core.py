@@ -33,8 +33,10 @@ class Song:
     chart_path: Optional[str]
     chart_md5: Optional[str]
     score: float
+    genre: str = ""
 
     def __post_init__(self) -> None:
         self.name = strip_color_tags(self.name)
         self.artist = strip_color_tags(self.artist)
         self.charter = strip_color_tags(self.charter)
+        self.genre = strip_color_tags(self.genre)

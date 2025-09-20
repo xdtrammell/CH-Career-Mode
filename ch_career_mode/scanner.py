@@ -119,11 +119,17 @@ class ScanWorker(QObject):
                 is_very_long INTEGER,
                 chart_path TEXT,
                 chart_md5 TEXT,
-                score REAL
+                score REAL,
+                genre TEXT
             )
             """
         )
         conn.commit()
+        try:
+            cur.execute("ALTER TABLE songs ADD COLUMN genre TEXT")
+        except sqlite3.OperationalError:
+            pass
+
 
         total_dirs = sum(1 for _ in os.walk(self.root))
         processed_dirs = 0
@@ -154,22 +160,30 @@ class ScanWorker(QObject):
             row = cur.fetchone()
             if row and abs(row[0] - mtime) < 1e-6:
                 cur.execute(
-                    "SELECT name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score FROM songs WHERE path=?",
+                    "SELECT name,artist,charter,genre,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score FROM songs WHERE path=?",
                     (ini_path,),
                 )
                 row2 = cur.fetchone()
                 if row2:
+                    cached_genre = strip_color_tags(row2[3] or "")
+                    if not cached_genre:
+                        ini_data = read_song_ini(ini_path)
+                        cached_genre = strip_color_tags(ini_data.get("genre")) if ini_data else ""
+                        if cached_genre:
+                            cur.execute("UPDATE songs SET genre=? WHERE path=?", (cached_genre, ini_path))
+                            conn.commit()
                     s = Song(
                         path=ini_path,
                         name=strip_color_tags(row2[0]),
                         artist=strip_color_tags(row2[1]),
                         charter=strip_color_tags(row2[2]),
-                        length_ms=row2[3],
-                        diff_guitar=row2[4],
-                        is_very_long=bool(row2[5]),
-                        chart_path=row2[6],
-                        chart_md5=row2[7],
-                        score=row2[8] or 0.0,
+                        genre=cached_genre,
+                        length_ms=row2[4],
+                        diff_guitar=row2[5],
+                        is_very_long=bool(row2[6]),
+                        chart_path=row2[7],
+                        chart_md5=row2[8],
+                        score=row2[9] or 0.0,
                     )
                     if s.diff_guitar is not None and s.diff_guitar >= 1:
                         results.append(s)
@@ -183,6 +197,7 @@ class ScanWorker(QObject):
             name = strip_color_tags(raw_name if raw_name else os.path.basename(dirpath))
             artist = strip_color_tags(data.get("artist"))
             charter = strip_color_tags(data.get("charter"))
+            genre = strip_color_tags(data.get("genre"))
 
             try:
                 length_ms = int(float(data.get("song_length", "0")))
@@ -216,11 +231,12 @@ class ScanWorker(QObject):
                 chart_path=chart,
                 chart_md5=chart_md5,
                 score=score,
+                genre=genre,
             )
             results.append(s)
 
             cur.execute(
-                "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     ini_path,
                     mtime,
@@ -233,6 +249,7 @@ class ScanWorker(QObject):
                     s.chart_path,
                     s.chart_md5,
                     s.score,
+                    s.genre,
                 ),
             )
             conn.commit()

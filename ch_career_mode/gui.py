@@ -172,16 +172,17 @@ class CompactItemDelegate(QStyledItemDelegate):
 
 
 class TierList(QListWidget):
-    def __init__(self, title: str):
+    def __init__(self, title: str, drop_handler=None):
         super().__init__()
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
-        self.setDragDropMode(QListWidget.InternalMove)
+        self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setDefaultDropAction(Qt.MoveAction)
         inner_min = max(200, TIER_COLUMN_MIN_WIDTH - 16)
         self.setMinimumWidth(inner_min)
         self.title = title
         self.title_label: Optional[QLabel] = None
+        self._external_drop_handler = drop_handler
 
     def set_title(self, title: str) -> None:
         self.title = title
@@ -190,6 +191,41 @@ class TierList(QListWidget):
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
         return QSize(220, 360)
+
+    def _accepts_external_drag(self, event) -> bool:
+        source = event.source()
+        return (
+            self._external_drop_handler is not None
+            and isinstance(source, QListWidget)
+            and getattr(source, "library_source", False)
+        )
+
+    def dragEnterEvent(self, event):
+        if self._accepts_external_drag(event):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        if self._accepts_external_drag(event):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        if self._accepts_external_drag(event):
+            source = event.source()
+            songs = []
+            for item in source.selectedItems():
+                song = item.data(Qt.UserRole)
+                if song:
+                    songs.append(song)
+            if songs:
+                event.setDropAction(Qt.CopyAction)
+                self._external_drop_handler(self, songs)
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -235,6 +271,10 @@ class MainWindow(QMainWindow):
         self.folder_status_label = QLabel("(none)")
         self.folder_status_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
+        group_genre_setting = bool(self.settings.value("group_by_genre", False, type=bool))
+        self.chk_group_genre = QCheckBox("Group songs in tiers by genre")
+        self.chk_group_genre.setChecked(group_genre_setting)
+
         self.spin_tiers = QSpinBox()
         self.spin_tiers.setRange(1, 20)
         self.spin_tiers.setValue(6)
@@ -254,7 +294,10 @@ class MainWindow(QMainWindow):
         self.lib_list = QListWidget()
         self.lib_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.lib_list.setDragEnabled(True)
-        self.lib_list.setDefaultDropAction(Qt.MoveAction)
+        self.lib_list.setDragDropMode(QAbstractItemView.DragOnly)
+        self.lib_list.setDefaultDropAction(Qt.CopyAction)
+        self.lib_list.setAcceptDrops(False)
+        self.lib_list.library_source = True
         self._list_delegates.append(self._apply_compact_list_style(self.lib_list))
 
         self.tiers_container = QWidget()
@@ -292,8 +335,8 @@ class MainWindow(QMainWindow):
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
         form.addRow(self.chk_artistlimit)
         form.addRow(self.chk_longrule)
+        form.addRow(self.chk_group_genre)
         form.addRow(QLabel("Theme:"), self.theme_combo)
-        form.addRow(QLabel("Search:"), self.search_box)
         form.addRow(self.btn_auto, self.btn_export)
 
         central = QWidget()
@@ -306,7 +349,10 @@ class MainWindow(QMainWindow):
         left_box = QVBoxLayout()
         left_box.setContentsMargins(0, 0, 0, 0)
         left_box.setSpacing(4)
-        left_box.addWidget(QLabel("Library"))
+        library_label = QLabel("Library")
+        left_box.addWidget(library_label)
+        self.search_box.setClearButtonEnabled(True)
+        left_box.addWidget(self.search_box)
         left_box.addWidget(self.lib_list, 1)
         tip_label = QLabel("Tip: drag songs into tiers; double-click to remove from a tier")
         tip_label.setWordWrap(True)
@@ -326,8 +372,7 @@ class MainWindow(QMainWindow):
         self.spin_tiers.valueChanged.connect(self._on_tier_count_changed)
         self.search_box.textChanged.connect(self._refresh_library_view)
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
-
-        self.root_folder: Optional[str] = self.settings.value("root_folder", None, type=str)
+        self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
 
     def _update_size_constraints(self) -> None:
         if hasattr(self, 'lib_list'):
@@ -416,6 +461,10 @@ class MainWindow(QMainWindow):
         self._update_tier_titles()
         self._update_size_constraints()
 
+    def _on_group_genre_changed(self, state: int) -> None:
+        self.settings.setValue("group_by_genre", state == Qt.Checked)
+        self.settings.sync()
+
     def _on_tier_count_changed(self, value: int) -> None:
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
@@ -447,7 +496,7 @@ class MainWindow(QMainWindow):
         cols = TIER_COLUMNS
         tier_count = self.spin_tiers.value()
         for idx in range(tier_count):
-            tier = TierList(self._tier_name(idx))
+            tier = TierList(self._tier_name(idx), drop_handler=self._handle_library_drop)
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
             self._list_delegates.append(self._apply_compact_list_style(tier))
 
@@ -540,6 +589,13 @@ class MainWindow(QMainWindow):
         self._sync_tier_height(tier_widget)
         self._sync_all_tier_heights()
 
+    def _handle_library_drop(self, tier_widget: TierList, songs: List[Song]) -> None:
+        for song in songs:
+            item = self._build_song_item(song)
+            tier_widget.addItem(item)
+        self._sync_tier_height(tier_widget)
+        self._sync_all_tier_heights()
+
     def _build_song_item(self, song: Song) -> QListWidgetItem:
         has_length = song.length_ms is not None and song.length_ms >= 0
         if has_length:
@@ -552,6 +608,7 @@ class MainWindow(QMainWindow):
         display_name = strip_color_tags(song.name)
         display_artist = strip_color_tags(song.artist)
         display_charter = strip_color_tags(song.charter)
+        display_genre = strip_color_tags(song.genre) if getattr(song, "genre", "") else ""
 
         artist_segment = f" - {display_artist}" if display_artist else ""
         length_segment = f" [{length_str}]" if length_str else ""
@@ -560,6 +617,8 @@ class MainWindow(QMainWindow):
         details = []
         if display_artist:
             details.append(f"Artist: {display_artist}")
+        if display_genre:
+            details.append(f"Genre: {display_genre}")
         if display_charter:
             details.append(f"Charter: {display_charter}")
         difficulty_text = f"D{song.diff_guitar}" if song.diff_guitar is not None else "Unknown"
@@ -639,6 +698,7 @@ class MainWindow(QMainWindow):
             enforce_artist_limit=self.chk_artistlimit.isChecked(),
             keep_very_long_out_of_first_two=self.chk_longrule.isChecked(),
             shuffle_seed=None,
+            group_by_genre=self.chk_group_genre.isChecked(),
         )
         for i, w in enumerate(self.tiers_widgets):
             w.clear()
