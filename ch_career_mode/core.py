@@ -1,3 +1,5 @@
+"""Core data structures and helpers shared across the career builder."""
+
 from dataclasses import dataclass
 import re
 from typing import Optional
@@ -23,6 +25,8 @@ def difficulty_score(diff_guitar: Optional[int], length_ms: Optional[int]) -> fl
 
 @dataclass
 class Song:
+    """Normalized metadata for a Clone Hero song used across the toolchain."""
+
     path: str
     name: str
     artist: str

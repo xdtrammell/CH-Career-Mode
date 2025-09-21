@@ -1,3 +1,5 @@
+"""Helpers for writing and validating Clone Hero .setlist binaries."""
+
 import struct
 from typing import List
 

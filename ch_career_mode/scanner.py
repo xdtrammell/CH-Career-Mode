@@ -1,3 +1,5 @@
+"""Scan Clone Hero libraries, normalise metadata, and cache song details."""
+
 import configparser
 import os
 import sqlite3
@@ -186,7 +188,7 @@ class ScanWorker(QObject):
                         chart_md5=row2[8],
                         score=row2[9] or 0.0,
                     )
-                    chart_md5 = (s.chart_md5 or "").strip()
+                    chart_md5 = (s.chart_md5 or "").strip()  # Use cached MD5 to filter duplicates in-memory
                     if chart_md5 and chart_md5 in seen_md5:
                         continue
                     if s.diff_guitar is not None and s.diff_guitar >= 1:
@@ -239,7 +241,7 @@ class ScanWorker(QObject):
                 score=score,
                 genre=genre,
             )
-            duplicate_md5 = chart_md5.strip() if chart_md5 else ""
+            duplicate_md5 = chart_md5.strip() if chart_md5 else ""  # Track duplicates encountered during this run
             include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
             if include_song and diff_guitar is not None and diff_guitar >= 1:
                 results.append(s)
@@ -268,4 +270,5 @@ class ScanWorker(QObject):
         conn.close()
         self.progress.emit(100)
         self.done.emit(results)
+
 

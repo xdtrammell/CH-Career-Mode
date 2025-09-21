@@ -1,3 +1,5 @@
+"""Qt GUI for scanning libraries, arranging tiers, and exporting setlists."""
+
 import math
 import os
 import random
@@ -140,12 +142,14 @@ PROCEDURAL_NOUNS = [
 
 
 def _procedural_name(i: int) -> str:
+    """Return a deterministic procedural tier name for index *i*."""
     a = PROCEDURAL_ADJS[i % len(PROCEDURAL_ADJS)]
     n = PROCEDURAL_NOUNS[i % len(PROCEDURAL_NOUNS)]
     return f"{a} {n}"
 
 
 def tier_name_for(i: int, theme: str) -> str:
+    """Resolve a tier name based on the configured theme."""
     names = THEME_SETS.get(theme)
     if names:
         return names[i] if i < len(names) else f"Tier {i+1}"
@@ -169,13 +173,15 @@ QListWidget::item:selected {
 
 
 class CompactItemDelegate(QStyledItemDelegate):
-    """Shrinks list row height so more songs fit on screen."""
+    """Item delegate that keeps QListWidget rows compact."""
 
     def __init__(self, vertical_padding: int = 2, parent=None):
+        """Store the desired vertical padding for compact rows."""
         super().__init__(parent)
         self.vertical_padding = max(0, vertical_padding)
 
     def sizeHint(self, option, index):  # type: ignore[override]
+        """Report a reduced-height size hint based on delegate padding."""
         size = super().sizeHint(option, index)
         fm_height = option.fontMetrics.height()
         size.setHeight(fm_height + self.vertical_padding * 2)
@@ -183,7 +189,9 @@ class CompactItemDelegate(QStyledItemDelegate):
 
 
 class TierList(QListWidget):
+    """List widget used for tiers with optional drag-and-drop support."""
     def __init__(self, title: str, drop_handler=None):
+        """Initialise the list and record an optional external drop handler."""
         super().__init__()
         self.setAcceptDrops(True)
         self.setDragEnabled(True)
@@ -196,14 +204,17 @@ class TierList(QListWidget):
         self._external_drop_handler = drop_handler
 
     def set_title(self, title: str) -> None:
+        """Update both the stored title and any associated label widget."""
         self.title = title
         if self.title_label is not None:
             self.title_label.setText(title)
 
     def sizeHint(self) -> QSize:  # type: ignore[override]
+        """Return a sensible default size for the tier column."""
         return QSize(220, 360)
 
     def _accepts_external_drag(self, event) -> bool:
+        """Return True when the drag originates from the library list."""
         source = event.source()
         return (
             self._external_drop_handler is not None
@@ -212,12 +223,14 @@ class TierList(QListWidget):
         )
 
     def dragEnterEvent(self, event):
+        """Accept drags from the library; defer others to the default handler."""
         if self._accepts_external_drag(event):
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
+        """Keep the move cursor active while a valid drag hovers."""
         if self._accepts_external_drag(event):
             event.acceptProposedAction()
         else:
@@ -240,7 +253,9 @@ class TierList(QListWidget):
 
 
 class MainWindow(QMainWindow):
+    """Main application window coordinating scans, tiering, and exports."""
     def __init__(self):
+        """Bootstrap widgets, restore persisted settings, and prep defaults."""
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
         self.resize(DEFAULT_WINDOW_SIZE)
@@ -401,6 +416,7 @@ class MainWindow(QMainWindow):
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
     def _update_size_constraints(self) -> None:
+        """Enforce minimum widget sizes so the layout remains usable."""
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
@@ -416,10 +432,12 @@ class MainWindow(QMainWindow):
                 self.resize(target_width, target_height)
 
     def _is_procedural_theme(self) -> bool:
+        """Return True when the active theme should auto-generate tier names."""
         theme = self.theme_combo.currentText() if hasattr(self, "theme_combo") else ""
         return bool(theme) and theme.lower().startswith("procedural")
 
     def _generate_procedural_names(self, count: int) -> List[str]:
+        """Produce deterministic pseudo-random tier names."""
         combos = [f"{adj} {noun}" for adj in PROCEDURAL_ADJS for noun in PROCEDURAL_NOUNS]
         if not combos:
             return [f"Tier {i+1}" for i in range(count)]
@@ -443,6 +461,7 @@ class MainWindow(QMainWindow):
         return selected
 
     def _regenerate_tier_names(self, procedural_refresh: bool = False) -> None:
+        """Update the tier-name cache based on the current theme selection."""
         count = self.spin_tiers.value() if hasattr(self, "spin_tiers") else 0
         theme = self.theme_combo.currentText() if hasattr(self, "theme_combo") else ""
         if theme == "None (Custom Tier Names)":
@@ -460,6 +479,7 @@ class MainWindow(QMainWindow):
         self.current_tier_names = names
 
     def _update_folder_status(self) -> None:
+        """Refresh the library folder indicator and tooltip."""
         valid_path = self.root_folder if self.root_folder and os.path.isdir(self.root_folder) else None
         color = "#3CC13B" if valid_path else "#D9534F"
         self.folder_status_indicator.setStyleSheet(
@@ -472,42 +492,51 @@ class MainWindow(QMainWindow):
         self.folder_status_label.setToolTip(display_text)
     
     def _update_tier_titles(self) -> None:
+        """Sync each tier widget caption with the latest names."""
         for idx, tier in enumerate(self.tiers_widgets):
             tier.set_title(self._tier_name(idx))
 
     def _tier_name(self, idx: int) -> str:
+        """Return a tier name for the index, falling back to numbering."""
         if 0 <= idx < len(self.current_tier_names):
             return self.current_tier_names[idx]
         theme = self.theme_combo.currentText() if hasattr(self, "theme_combo") else ""
         return tier_name_for(idx, theme)
 
     def _on_theme_changed(self, theme: str) -> None:
+        """Persist the theme selection and regenerate tier names."""
         self.settings.setValue("tier_theme", theme)
         self._regenerate_tier_names(procedural_refresh=True)
         self._update_tier_titles()
         self._update_size_constraints()
 
     def _on_group_genre_changed(self, state: int) -> None:
+        """Store the genre-group toggle and refresh the library if needed."""
         self.settings.setValue("group_by_genre", state == Qt.Checked)
         self.settings.sync()
 
     def _on_exclude_meme_changed(self, state: int) -> None:
+        """Persist the meme filter toggle and refresh the library view."""
         self.settings.setValue("exclude_memes", state == Qt.Checked)
         self._refresh_library_view()
 
     def _on_artist_limit_changed(self, value: int) -> None:
+        """Save the per-artist cap and refresh the library preview."""
         self.settings.setValue("artist_limit", value)
         self._refresh_library_view()
 
     def _on_min_difficulty_changed(self, value: int) -> None:
+        """Persist the minimum difficulty threshold and refresh the list."""
         self.settings.setValue("min_difficulty", value)
         self._refresh_library_view()
 
     def _on_tier_count_changed(self, value: int) -> None:
+        """Rebuild the tier widgets when the tier count changes."""
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
 
     def _apply_compact_list_style(self, widget: QListWidget) -> CompactItemDelegate:
+        """Attach the compact delegate and configure shared list settings."""
         widget.setStyleSheet(COMPACT_LIST_STYLE)
         widget.setSpacing(1)
         widget.setUniformItemSizes(True)
@@ -520,6 +549,7 @@ class MainWindow(QMainWindow):
         return delegate
 
     def _rebuild_tier_widgets(self) -> None:
+        """Create the tier list widgets according to the current tier count."""
         self._list_delegates = self._list_delegates[:1]
         self._regenerate_tier_names()
         self.tiers_widgets.clear()
@@ -567,6 +597,7 @@ class MainWindow(QMainWindow):
             self._update_size_constraints()
 
     def _create_tier_panel(self, tier: TierList) -> QWidget:
+        """Wrap a tier list with a captioned container for display."""
         panel = QWidget()
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout = QVBoxLayout(panel)
@@ -585,6 +616,7 @@ class MainWindow(QMainWindow):
         return panel
 
     def _sync_tier_height(self, tier: TierList) -> None:
+        """Resize a tier to show the configured number of rows."""
         target_rows = max(self.spin_songs_per.value(), tier.count())
         height = self._tier_height_for(tier, target_rows)
         tier.setFixedHeight(height)
@@ -593,6 +625,7 @@ class MainWindow(QMainWindow):
             parent.updateGeometry()
 
     def _tier_height_for(self, tier: QListWidget, rows: int) -> int:
+        """Compute the pixel height needed to display *rows* entries."""
         if rows <= 0:
             rows = 1
 
@@ -618,16 +651,19 @@ class MainWindow(QMainWindow):
         )
 
     def _sync_all_tier_heights(self) -> None:
+        """Synchronise every tier list height after content changes."""
         for tier in self.tiers_widgets:
             self._sync_tier_height(tier)
         self._update_size_constraints()
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
+        """Remove a song from a tier and return it to the library pane."""
         tier_widget.takeItem(tier_widget.row(item))
         self._sync_tier_height(tier_widget)
         self._sync_all_tier_heights()
 
     def _handle_library_drop(self, tier_widget: TierList, songs: List[Song]) -> None:
+        """Add dropped library songs to a tier while respecting filters."""
         for song in songs:
             if (song.diff_guitar or 0) < self.spin_min_diff.value():
                 continue
@@ -639,6 +675,7 @@ class MainWindow(QMainWindow):
         self._sync_all_tier_heights()
 
     def _build_song_item(self, song: Song) -> QListWidgetItem:
+        """Create a list item with display text and metadata tooltip."""
         has_length = song.length_ms is not None and song.length_ms >= 0
         if has_length:
             mins = song.length_ms // 60000
@@ -673,6 +710,7 @@ class MainWindow(QMainWindow):
         return item
 
     def _refresh_library_view(self) -> None:
+        """Populate the library list according to the active filters."""
         q = self.search_box.text().lower().strip()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
@@ -688,6 +726,7 @@ class MainWindow(QMainWindow):
             self.lib_list.addItem(item)
 
     def pick_folder(self) -> None:
+        """Prompt the user to select a Clone Hero songs directory."""
         initial_dir = self.root_folder if self.root_folder and os.path.isdir(self.root_folder) else os.path.expanduser("~")
         d = QFileDialog.getExistingDirectory(self, "Pick top-level Clone Hero songs root", initial_dir)
         if d:
@@ -696,6 +735,7 @@ class MainWindow(QMainWindow):
             self._update_folder_status()
 
     def scan_now(self) -> None:
+        """Start the asynchronous library scan with progress feedback."""
         if not self.root_folder or not os.path.isdir(self.root_folder):
             self.root_folder = None
             self.settings.remove("root_folder")
@@ -726,12 +766,14 @@ class MainWindow(QMainWindow):
         self.progress.show()
 
     def _scan_finished(self, songs: List[Song]) -> None:
+        """Handle completion of the background scan and refresh the UI."""
         self.library = songs
         self._refresh_library_view()
         self.progress.close()
         QMessageBox.information(self, "Scan complete", f"Found {len(songs)} eligible songs.")
 
     def auto_arrange(self) -> None:
+        """Generate a new set of tiers using the current configuration."""
         if not self.library:
             QMessageBox.warning(self, "No library", "Scan your library first.")
             return
@@ -773,6 +815,7 @@ class MainWindow(QMainWindow):
         self._sync_all_tier_heights()
 
     def export_now(self) -> None:
+        """Export the arranged tiers to Clone Hero .setlist files."""
         tiers_songs: List[List[Song]] = []
         for w in self.tiers_widgets:
             tier_list: List[Song] = []

@@ -1,3 +1,5 @@
+"""Tier construction algorithms, difficulty banding, and genre balancing logic."""
+
 import random
 import time
 import re
@@ -456,4 +458,5 @@ def _auto_tier_by_genre(
         tiers[ti] = sorted(picks[:songs_per_tier], key=lambda s: (s.score, s.name.lower()))
 
     return tiers
+
 
