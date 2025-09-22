@@ -390,7 +390,8 @@ class MainWindow(QMainWindow):
         form.addRow(self.chk_artist_career_mode)
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
-        form.addRow(QLabel("Max tracks by artist per tier:"), self.spin_artist_limit)
+        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
+        form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
         form.addRow(QLabel("Theme:"), self.theme_combo)
         form.addRow(self.btn_auto, self.btn_export)
@@ -434,6 +435,8 @@ class MainWindow(QMainWindow):
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
+
+        self._apply_artist_mode_state()
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -541,8 +544,9 @@ class MainWindow(QMainWindow):
         self.settings.sync()
 
     def _on_artist_career_mode_changed(self, state: int) -> None:
-        """Persist the artist-career-mode toggle."""
+        """Persist the artist-career-mode toggle and refresh dependent UI."""
         self.settings.setValue("artist_career_mode", state == Qt.Checked)
+        self._apply_artist_mode_state()
 
     def _on_exclude_meme_changed(self, state: int) -> None:
         """Persist the meme filter toggle and refresh the library view."""
@@ -557,6 +561,16 @@ class MainWindow(QMainWindow):
     def _on_artist_limit_changed(self, value: int) -> None:
         """Save the per-artist cap and refresh the library preview."""
         self.settings.setValue("artist_limit", value)
+        self._refresh_library_view()
+
+    def _apply_artist_mode_state(self) -> None:
+        """Enable/disable controls tied to artist-career mode and refresh."""
+        if not hasattr(self, "chk_artist_career_mode"):
+            return
+        artist_mode = self.chk_artist_career_mode.isChecked()
+        self.spin_artist_limit.setEnabled(not artist_mode)
+        if hasattr(self, "lbl_artist_limit"):
+            self.lbl_artist_limit.setEnabled(not artist_mode)
         self._refresh_library_view()
 
     def _on_min_difficulty_changed(self, value: int) -> None:
@@ -757,16 +771,16 @@ class MainWindow(QMainWindow):
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
         query = ""
         if apply_search_filter and hasattr(self, "search_box"):
-            query = self.search_box.text().lower().strip()
+            query = self.search_box.text().casefold().strip()
 
         def matches_query(song: Song) -> bool:
             if not query:
                 return True
-            artist = (song.artist or "").lower()
+            artist = (song.artist or "").casefold()
             if query_mode == "artist_only":
                 return query in artist
-            name = (song.name or "").lower()
-            charter = (song.charter or "").lower()
+            name = (song.name or "").casefold()
+            charter = (song.charter or "").casefold()
             return query in name or query in artist or query in charter
 
         filtered: List[Song] = []
@@ -787,7 +801,9 @@ class MainWindow(QMainWindow):
     def _refresh_library_view(self) -> None:
         """Populate the library list according to the active filters."""
         self.lib_list.clear()
-        for s in self._eligible_library_songs(apply_search_filter=True):
+        artist_toggle = getattr(self, "chk_artist_career_mode", None)
+        query_mode = "artist_only" if artist_toggle and artist_toggle.isChecked() else "library"
+        for s in self._eligible_library_songs(apply_search_filter=True, query_mode=query_mode):
             item = self._build_song_item(s)
             self.lib_list.addItem(item)
 
