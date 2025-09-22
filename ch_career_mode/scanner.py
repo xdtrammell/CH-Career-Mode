@@ -136,7 +136,7 @@ class ScanWorker(QObject):
         total_dirs = sum(1 for _ in os.walk(self.root))
         processed_dirs = 0
         results: List[Song] = []
-        seen_md5: Set[str] = set()
+        seen_md5: Set[str] = set()  # Track chart hashes to avoid duplicates
 
         for dirpath, dirnames, filenames in os.walk(self.root):
             if self._stop:
@@ -241,7 +241,7 @@ class ScanWorker(QObject):
                 score=score,
                 genre=genre,
             )
-            duplicate_md5 = chart_md5.strip() if chart_md5 else ""  # Track duplicates encountered during this run
+            duplicate_md5 = chart_md5.strip() if chart_md5 else ""  # Hash for deduplication within this run  # Track duplicates encountered during this run
             include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
             if include_song and diff_guitar is not None and diff_guitar >= 1:
                 results.append(s)

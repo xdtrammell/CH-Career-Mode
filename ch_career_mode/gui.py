@@ -5,6 +5,7 @@ import os
 import random
 import time
 from typing import List, Optional
+from dataclasses import replace
 
 from PySide6.QtCore import Qt, QSize, QSettings, QThread
 from PySide6.QtWidgets import (
@@ -34,7 +35,7 @@ from PySide6.QtWidgets import (
     QStyle,
 )
 
-from .core import Song, strip_color_tags
+from .core import Song, strip_color_tags, effective_score, effective_diff
 from .scanner import ScanWorker
 from .tiering import auto_tier
 from .exporter import export_setlist_binary, read_setlist_md5s
@@ -292,6 +293,10 @@ class MainWindow(QMainWindow):
         exclude_memes_setting = bool(self.settings.value("exclude_memes", False, type=bool))
         self.chk_exclude_meme = QCheckBox("Exclude meme songs")
         self.chk_exclude_meme.setChecked(exclude_memes_setting)
+        lower_official_setting = bool(self.settings.value("lower_official", False, type=bool))
+        self.chk_lower_official = QCheckBox("Lower official chart difficulty")
+        self.chk_lower_official.setChecked(lower_official_setting)
+        self.chk_lower_official.setToolTip("Treats Harmonix/Neversoft charts as 1 step easier when scoring difficulty.")
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
@@ -372,6 +377,7 @@ class MainWindow(QMainWindow):
         form.addRow(self.chk_longrule)
         form.addRow(self.chk_group_genre)
         form.addRow(self.chk_exclude_meme)
+        form.addRow(self.chk_lower_official)
         form.addRow(QLabel("Max tracks by artist per tier:"), self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
         form.addRow(QLabel("Theme:"), self.theme_combo)
@@ -412,8 +418,14 @@ class MainWindow(QMainWindow):
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
+
+    def _lower_official_enabled(self) -> bool:
+        """Return whether official Harmonix/Neversoft charts should be adjusted."""
+        return self.chk_lower_official.isChecked()
+
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
@@ -518,6 +530,11 @@ class MainWindow(QMainWindow):
     def _on_exclude_meme_changed(self, state: int) -> None:
         """Persist the meme filter toggle and refresh the library view."""
         self.settings.setValue("exclude_memes", state == Qt.Checked)
+        self._refresh_library_view()
+
+    def _on_lower_official_changed(self, state: int) -> None:
+        """Persist the Harmonix/Neversoft adjustment preference and refresh."""
+        self.settings.setValue("lower_official", state == Qt.Checked)
         self._refresh_library_view()
 
     def _on_artist_limit_changed(self, value: int) -> None:
@@ -664,8 +681,10 @@ class MainWindow(QMainWindow):
 
     def _handle_library_drop(self, tier_widget: TierList, songs: List[Song]) -> None:
         """Add dropped library songs to a tier while respecting filters."""
+        lower_official = self._lower_official_enabled()
         for song in songs:
-            if (song.diff_guitar or 0) < self.spin_min_diff.value():
+            effective = effective_diff(song, lower_official) or 0
+            if effective < self.spin_min_diff.value():
                 continue
             if self.chk_exclude_meme.isChecked() and (song.genre or "").strip().lower() in MEME_GENRES:
                 continue
@@ -693,6 +712,7 @@ class MainWindow(QMainWindow):
         length_segment = f" [{length_str}]" if length_str else ""
         item = QListWidgetItem(f"{display_name}{artist_segment}{length_segment}")
 
+        lower_official = self._lower_official_enabled()
         details = []
         if display_artist:
             details.append(f"Artist: {display_artist}")
@@ -700,9 +720,10 @@ class MainWindow(QMainWindow):
             details.append(f"Genre: {display_genre}")
         if display_charter:
             details.append(f"Charter: {display_charter}")
-        difficulty_text = f"D{song.diff_guitar}" if song.diff_guitar is not None else "Unknown"
+        adj_diff = effective_diff(song, lower_official)
+        difficulty_text = f"D{adj_diff}" if adj_diff is not None else "Unknown"
         details.append(f"Difficulty: {difficulty_text}")
-        details.append(f"Score: {int(song.score)}")
+        details.append(f"Score: {int(effective_score(song, lower_official))}")
         if length_str:
             details.append(f"Length: {length_str}")
         item.setToolTip("\n".join(details))
@@ -714,9 +735,12 @@ class MainWindow(QMainWindow):
         q = self.search_box.text().lower().strip()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
+        lower_official = self._lower_official_enabled()
         self.lib_list.clear()
-        for s in sorted(self.library, key=lambda s: (s.score, s.name.lower())):
-            if (s.diff_guitar or 0) < min_diff:
+        score_key = lambda song: (effective_score(song, lower_official), song.name.lower())
+        for s in sorted(self.library, key=score_key):
+            effective = effective_diff(s, lower_official) or 0
+            if effective < min_diff:
                 continue
             if exclude_memes and (s.genre or "").strip().lower() in MEME_GENRES:
                 continue
@@ -783,13 +807,27 @@ class MainWindow(QMainWindow):
 
         min_diff = self.spin_min_diff.value()
         exclude_memes = self.chk_exclude_meme.isChecked()
-        songs = [s for s in self.library if (s.diff_guitar or 0) >= min_diff and (not exclude_memes or (s.genre or "").strip().lower() not in MEME_GENRES)]
-        if not songs:
+        lower_official = self._lower_official_enabled()
+        songs = [
+            s
+            for s in self.library
+            if (effective_diff(s, lower_official) or 0) >= min_diff
+            and (not exclude_memes or (s.genre or "").strip().lower() not in MEME_GENRES)
+        ]
+        tier_candidates = [
+            replace(
+                s,
+                diff_guitar=effective_diff(s, lower_official),
+                score=effective_score(s, lower_official),
+            )
+            for s in songs
+        ]
+        if not tier_candidates:
             QMessageBox.warning(self, "No songs meet criteria", "Lower the minimum difficulty, allow meme songs, or scan more songs.")
             return
 
         tiers = auto_tier(
-            songs,
+            tier_candidates,
             n_tiers,
             songs_per,
             max_tracks_per_artist=self.spin_artist_limit.value(),
