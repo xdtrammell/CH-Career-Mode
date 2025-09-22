@@ -8,6 +8,7 @@ from typing import List, Optional
 from dataclasses import replace
 
 from PySide6.QtCore import Qt, QSize, QSettings, QThread
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -33,6 +34,8 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QStyle,
+    QFrame,
+    QGraphicsDropShadowEffect,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -159,10 +162,12 @@ def tier_name_for(i: int, theme: str) -> str:
     return f"Tier {i+1}"
 
 
-COMPACT_LIST_STYLE = """
+LIBRARY_LIST_STYLE = """
 QListWidget {
     border: 1px solid #2c2c2c;
     padding: 2px;
+    background-color: #1a1a1a;
+    color: #f0f0f0;
 }
 QListWidget::item {
     padding: 2px 6px;
@@ -171,6 +176,49 @@ QListWidget::item:selected {
     background-color: #3c3c3c;
 }
 """
+
+TIER_LIST_STYLE = """
+QListWidget#tierList {
+    border: none;
+    padding: 4px 0;
+    background-color: transparent;
+    color: #f5f5f5;
+}
+QListWidget#tierList::item {
+    padding: 4px 10px;
+}
+QListWidget#tierList::item:alternate {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+QListWidget#tierList::item:selected {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+"""
+
+TIER_CARD_STYLE = """
+QFrame#tierCard {
+    background-color: #1b1d22;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+QWidget#tierHeader {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+}
+QLabel#tierTitle {
+    font-weight: 600;
+    color: #f8f9fa;
+}
+"""
+
+TIER_HEADER_COLORS = [
+    "#ff6b35",
+    "#f7b801",
+    "#6a994e",
+    "#386fa4",
+    "#a267ac",
+    "#ef476f",
+]
 
 
 class CompactItemDelegate(QStyledItemDelegate):
@@ -585,10 +633,18 @@ class MainWindow(QMainWindow):
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
 
-    def _apply_compact_list_style(self, widget: QListWidget) -> CompactItemDelegate:
+    def _apply_compact_list_style(self, widget: QListWidget, variant: str = "library") -> CompactItemDelegate:
         """Attach the compact delegate and configure shared list settings."""
-        widget.setStyleSheet(COMPACT_LIST_STYLE)
-        widget.setSpacing(1)
+        if variant == "tier":
+            widget.setObjectName("tierList")
+            widget.setStyleSheet(TIER_LIST_STYLE)
+            widget.setSpacing(0)
+            widget.setAlternatingRowColors(True)
+        else:
+            widget.setStyleSheet(LIBRARY_LIST_STYLE)
+            widget.setSpacing(1)
+            widget.setAlternatingRowColors(False)
+        widget.setFrameShape(QFrame.NoFrame)
         widget.setUniformItemSizes(True)
         widget.setSizeAdjustPolicy(QAbstractItemView.AdjustToContents)
         widget.setWordWrap(False)
@@ -616,9 +672,9 @@ class MainWindow(QMainWindow):
         for idx in range(tier_count):
             tier = TierList(self._tier_name(idx), drop_handler=self._handle_library_drop)
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
-            self._list_delegates.append(self._apply_compact_list_style(tier))
+            self._list_delegates.append(self._apply_compact_list_style(tier, variant="tier"))
 
-            wrapper = self._create_tier_panel(tier)
+            wrapper = self._create_tier_panel(tier, idx)
             row = idx // cols
             col = idx % cols
             self.tiers_layout.addWidget(wrapper, row, col)
@@ -646,18 +702,38 @@ class MainWindow(QMainWindow):
         if hasattr(self, "settings_box"):
             self._update_size_constraints()
 
-    def _create_tier_panel(self, tier: TierList) -> QWidget:
+    def _create_tier_panel(self, tier: TierList, index: int) -> QWidget:
         """Wrap a tier list with a captioned container for display."""
-        panel = QWidget()
+        panel = QFrame()
+        panel.setObjectName("tierCard")
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        panel.setStyleSheet(TIER_CARD_STYLE)
+
+        shadow = QGraphicsDropShadowEffect(panel)
+        shadow.setBlurRadius(18)
+        shadow.setOffset(0, 6)
+        shadow.setColor(QColor(0, 0, 0, 110))
+        panel.setGraphicsEffect(shadow)
+
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(4)
+        layout.setContentsMargins(0, 0, 0, 10)
+        layout.setSpacing(0)
+
+        header = QWidget()
+        header.setObjectName("tierHeader")
+        header_color = TIER_HEADER_COLORS[index % len(TIER_HEADER_COLORS)]
+        header.setStyleSheet(
+            f"background-color: {header_color}; border-top-left-radius: 12px; border-top-right-radius: 12px;"
+        )
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(12, 10, 12, 10)
+        header_layout.setSpacing(0)
 
         title = QLabel(tier.title)
+        title.setObjectName("tierTitle")
         title.setAlignment(Qt.AlignHCenter)
-        title.setStyleSheet("font-weight: bold;")
-        layout.addWidget(title)
+        header_layout.addWidget(title)
+        layout.addWidget(header)
         tier.title_label = title
 
         tier.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
