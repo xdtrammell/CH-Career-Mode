@@ -387,7 +387,9 @@ class MainWindow(QMainWindow):
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
         form.addRow(self.chk_longrule)
         form.addRow(self.chk_group_genre)
+
         form.addRow(self.chk_artist_career_mode)
+
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
@@ -761,7 +763,9 @@ class MainWindow(QMainWindow):
         item.setData(Qt.UserRole, song)
         return item
 
+
     def _eligible_library_songs(self, apply_search_filter: bool, *, query_mode: str = "library") -> List[Song]:
+
         """Return songs passing library filters, optionally narrowed by search."""
         if not self.library:
             return []
@@ -772,6 +776,7 @@ class MainWindow(QMainWindow):
         query = ""
         if apply_search_filter and hasattr(self, "search_box"):
             query = self.search_box.text().casefold().strip()
+
 
         def matches_query(song: Song) -> bool:
             if not query:
