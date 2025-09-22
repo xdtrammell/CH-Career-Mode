@@ -316,6 +316,17 @@ class MainWindow(QMainWindow):
         self.chk_group_genre = QCheckBox("Group songs in tiers by genre")
         self.chk_group_genre.setChecked(group_genre_setting)
 
+        artist_mode_setting = bool(self.settings.value("artist_career_mode", False, type=bool))
+        if not artist_mode_setting and self.settings.contains("filter_setlist"):
+            artist_mode_setting = bool(self.settings.value("filter_setlist", False, type=bool))
+            self.settings.setValue("artist_career_mode", artist_mode_setting)
+            self.settings.remove("filter_setlist")
+        self.chk_artist_career_mode = QCheckBox("Artist career mode")
+        self.chk_artist_career_mode.setToolTip(
+            "When enabled, Auto-Arrange builds tiers only from songs where the Artist tag matches the current search."
+        )
+        self.chk_artist_career_mode.setChecked(artist_mode_setting)
+
         self.spin_tiers = QSpinBox()
         self.spin_tiers.setRange(1, 20)
         self.spin_tiers.setValue(6)
@@ -376,6 +387,7 @@ class MainWindow(QMainWindow):
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
         form.addRow(self.chk_longrule)
         form.addRow(self.chk_group_genre)
+        form.addRow(self.chk_artist_career_mode)
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
         form.addRow(QLabel("Max tracks by artist per tier:"), self.spin_artist_limit)
@@ -417,6 +429,7 @@ class MainWindow(QMainWindow):
         self.search_box.textChanged.connect(self._refresh_library_view)
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
+        self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
@@ -526,6 +539,10 @@ class MainWindow(QMainWindow):
         """Store the genre-group toggle and refresh the library if needed."""
         self.settings.setValue("group_by_genre", state == Qt.Checked)
         self.settings.sync()
+
+    def _on_artist_career_mode_changed(self, state: int) -> None:
+        """Persist the artist-career-mode toggle."""
+        self.settings.setValue("artist_career_mode", state == Qt.Checked)
 
     def _on_exclude_meme_changed(self, state: int) -> None:
         """Persist the meme filter toggle and refresh the library view."""
@@ -730,22 +747,47 @@ class MainWindow(QMainWindow):
         item.setData(Qt.UserRole, song)
         return item
 
-    def _refresh_library_view(self) -> None:
-        """Populate the library list according to the active filters."""
-        q = self.search_box.text().lower().strip()
+    def _eligible_library_songs(self, apply_search_filter: bool, *, query_mode: str = "library") -> List[Song]:
+        """Return songs passing library filters, optionally narrowed by search."""
+        if not self.library:
+            return []
+
+        lower_official = self._lower_official_enabled()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
-        lower_official = self._lower_official_enabled()
-        self.lib_list.clear()
-        score_key = lambda song: (effective_score(song, lower_official), song.name.lower())
-        for s in sorted(self.library, key=score_key):
-            effective = effective_diff(s, lower_official) or 0
+        query = ""
+        if apply_search_filter and hasattr(self, "search_box"):
+            query = self.search_box.text().lower().strip()
+
+        def matches_query(song: Song) -> bool:
+            if not query:
+                return True
+            artist = (song.artist or "").lower()
+            if query_mode == "artist_only":
+                return query in artist
+            name = (song.name or "").lower()
+            charter = (song.charter or "").lower()
+            return query in name or query in artist or query in charter
+
+        filtered: List[Song] = []
+        for song in self.library:
+            effective = effective_diff(song, lower_official) or 0
             if effective < min_diff:
                 continue
-            if exclude_memes and (s.genre or "").strip().lower() in MEME_GENRES:
+            genre_key = (song.genre or "").strip().lower()
+            if exclude_memes and genre_key in MEME_GENRES:
                 continue
-            if q and q not in s.name.lower() and q not in s.artist.lower() and q not in s.charter.lower():
+            if apply_search_filter and not matches_query(song):
                 continue
+            filtered.append(song)
+
+        filtered.sort(key=lambda song: (effective_score(song, lower_official), (song.name or "").lower()))
+        return filtered
+
+    def _refresh_library_view(self) -> None:
+        """Populate the library list according to the active filters."""
+        self.lib_list.clear()
+        for s in self._eligible_library_songs(apply_search_filter=True):
             item = self._build_song_item(s)
             self.lib_list.addItem(item)
 
@@ -805,15 +847,12 @@ class MainWindow(QMainWindow):
         songs_per = self.spin_songs_per.value()
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
 
-        min_diff = self.spin_min_diff.value()
-        exclude_memes = self.chk_exclude_meme.isChecked()
+        use_artist_mode = self.chk_artist_career_mode.isChecked()
+        songs = self._eligible_library_songs(
+            apply_search_filter=use_artist_mode,
+            query_mode="artist_only" if use_artist_mode else "library",
+        )
         lower_official = self._lower_official_enabled()
-        songs = [
-            s
-            for s in self.library
-            if (effective_diff(s, lower_official) or 0) >= min_diff
-            and (not exclude_memes or (s.genre or "").strip().lower() not in MEME_GENRES)
-        ]
         tier_candidates = [
             replace(
                 s,
@@ -823,14 +862,25 @@ class MainWindow(QMainWindow):
             for s in songs
         ]
         if not tier_candidates:
-            QMessageBox.warning(self, "No songs meet criteria", "Lower the minimum difficulty, allow meme songs, or scan more songs.")
+            if use_artist_mode:
+                QMessageBox.warning(
+                    self,
+                    "No songs meet criteria",
+                    "No songs match the current search and filters. Adjust the search query or disable Artist career mode.",
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "No songs meet criteria",
+                    "Lower the minimum difficulty, allow meme songs, or scan more songs.",
+                )
             return
 
         tiers = auto_tier(
             tier_candidates,
             n_tiers,
             songs_per,
-            max_tracks_per_artist=self.spin_artist_limit.value(),
+            max_tracks_per_artist=0 if use_artist_mode else self.spin_artist_limit.value(),
             keep_very_long_out_of_first_two=self.chk_longrule.isChecked(),
             shuffle_seed=None,
             group_by_genre=self.chk_group_genre.isChecked(),
