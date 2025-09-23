@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
-from .scanner import ScanWorker
+from .scanner import ScanWorker, get_cache_path
 from .tiering import auto_tier
 from .exporter import export_setlist_binary, read_setlist_md5s
 
@@ -327,6 +327,8 @@ class MainWindow(QMainWindow):
         self.btn_scan = QPushButton("Scan (recursive)")
         self.btn_auto = QPushButton("Auto-Arrange")
         self.btn_export = QPushButton("Export Setlist...")
+        self.btn_clear_cache = QPushButton("Clear Cache")
+        self.btn_clear_cache.setToolTip("Deletes the songs cache so the library will be rebuilt on next scan.")
 
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search title / artist / charter...")
@@ -422,6 +424,7 @@ class MainWindow(QMainWindow):
         form.setSpacing(6)
         form.setContentsMargins(8, 8, 8, 8)
         form.addRow(self.btn_pick, self.btn_scan)
+        form.addRow(self.btn_clear_cache)
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
         status_row.setSpacing(6)
@@ -476,6 +479,7 @@ class MainWindow(QMainWindow):
         self.btn_scan.clicked.connect(self.scan_now)
         self.btn_auto.clicked.connect(self.auto_arrange)
         self.btn_export.clicked.connect(self.export_now)
+        self.btn_clear_cache.clicked.connect(self.clear_cache)
         self.spin_tiers.valueChanged.connect(self._on_tier_count_changed)
         self.search_box.textChanged.connect(self._refresh_library_view)
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
@@ -897,6 +901,32 @@ class MainWindow(QMainWindow):
             self.settings.setValue("root_folder", d)
             self._update_folder_status()
 
+    def clear_cache(self) -> None:
+        """Allow the user to delete the cached song database."""
+
+        choice = QMessageBox.question(
+            self,
+            "Clear Cache",
+            "Are you sure you want to clear the cache? The library will need to be rescanned.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if choice != QMessageBox.Yes:
+            return
+
+        cache_path = get_cache_path(create=False)
+        try:
+            os.remove(cache_path)
+            removed = True
+        except FileNotFoundError:
+            removed = False
+        except OSError as exc:
+            QMessageBox.warning(self, "Cache Error", f"Could not clear the cache.\n{exc}")
+            return
+
+        if removed or not os.path.exists(cache_path):
+            QMessageBox.information(self, "Cache cleared", "The songs cache was cleared successfully.")
+
     def scan_now(self) -> None:
         """Start the asynchronous library scan with progress feedback."""
         if not self.root_folder or not os.path.isdir(self.root_folder):
@@ -912,7 +942,7 @@ class MainWindow(QMainWindow):
         self.progress.setMinimumDuration(0)
 
         self.thread = QThread(self)
-        cache_db = os.path.join(os.path.expanduser("~"), ".ch_career_cache", "songs.sqlite")
+        cache_db = get_cache_path()
         self.worker = ScanWorker(self.root_folder, cache_db)
         self.worker.moveToThread(self.thread)
 

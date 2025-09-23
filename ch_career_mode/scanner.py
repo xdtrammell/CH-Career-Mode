@@ -12,6 +12,27 @@ from .core import Song, strip_color_tags, difficulty_score
 PRIORITY = ["notes.chart", "notes.mid", "song.chart", "song.mid"]
 
 
+def _project_root() -> str:
+    """Return the absolute path to the repository root."""
+
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+
+
+def get_cache_dir(*, create: bool = True) -> str:
+    """Return the directory for cached song data, creating it when requested."""
+
+    cache_dir = os.path.join(_project_root(), ".cache")
+    if create:
+        os.makedirs(cache_dir, exist_ok=True)
+    return cache_dir
+
+
+def get_cache_path(*, create: bool = True) -> str:
+    """Return the absolute path to the songs cache database."""
+
+    return os.path.join(get_cache_dir(create=create), "songs.sqlite")
+
+
 def read_song_ini(ini_path: str) -> Dict[str, str]:
     """Robust song.ini reader (no interpolation, tolerant encodings)."""
     for enc in ("utf-8", "utf-8-sig", "latin-1"):
