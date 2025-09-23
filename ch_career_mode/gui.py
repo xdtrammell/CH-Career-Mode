@@ -347,6 +347,10 @@ class MainWindow(QMainWindow):
         self.chk_lower_official = QCheckBox("Lower official chart difficulty")
         self.chk_lower_official.setChecked(lower_official_setting)
         self.chk_lower_official.setToolTip("Treats Harmonix/Neversoft charts as 1 step easier when scoring difficulty.")
+        weight_by_nps_setting = bool(self.settings.value("weight_by_nps", False, type=bool))
+        self.chk_weight_nps = QCheckBox("Weight Difficulty by NPS")
+        self.chk_weight_nps.setChecked(weight_by_nps_setting)
+        self.chk_weight_nps.setToolTip("Adds Avg/Peak NPS to the difficulty score when enabled.")
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
@@ -443,6 +447,7 @@ class MainWindow(QMainWindow):
 
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
+        form.addRow(self.chk_weight_nps)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
@@ -487,6 +492,7 @@ class MainWindow(QMainWindow):
         self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
+        self.chk_weight_nps.stateChanged.connect(self._on_weight_by_nps_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
@@ -495,6 +501,10 @@ class MainWindow(QMainWindow):
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
         return self.chk_lower_official.isChecked()
+
+    def _weight_by_nps_enabled(self) -> bool:
+        """Return whether difficulty scores should include NPS weighting."""
+        return self.chk_weight_nps.isChecked()
 
 
     def _update_size_constraints(self) -> None:
@@ -611,6 +621,13 @@ class MainWindow(QMainWindow):
         """Persist the Harmonix/Neversoft adjustment preference and refresh."""
         self.settings.setValue("lower_official", state == Qt.Checked)
         self._refresh_library_view()
+        self._refresh_tier_tooltips()
+
+    def _on_weight_by_nps_changed(self, state: int) -> None:
+        """Persist the NPS weighting preference and refresh relevant views."""
+        self.settings.setValue("weight_by_nps", state == Qt.Checked)
+        self._refresh_library_view()
+        self._refresh_tier_tooltips()
 
     def _on_artist_limit_changed(self, value: int) -> None:
         """Save the per-artist cap and refresh the library preview."""
@@ -806,26 +823,49 @@ class MainWindow(QMainWindow):
         self._sync_tier_height(tier_widget)
         self._sync_all_tier_heights()
 
-    def _build_song_item(self, song: Song) -> QListWidgetItem:
-        """Create a list item with display text and metadata tooltip."""
-        has_length = song.length_ms is not None and song.length_ms >= 0
-        if has_length:
-            mins = song.length_ms // 60000
-            secs = (song.length_ms // 1000) % 60
-            length_str = f"{mins}:{secs:02d}"
-        else:
-            length_str = None
+    def _format_length(self, song: Song) -> Optional[str]:
+        """Return an mm:ss string for the song length when available."""
 
-        display_name = strip_color_tags(song.name)
-        display_artist = strip_color_tags(song.artist)
-        display_charter = strip_color_tags(song.charter)
-        display_genre = strip_color_tags(song.genre) if getattr(song, "genre", "") else ""
+        if song.length_ms is None or song.length_ms < 0:
+            return None
+        mins = song.length_ms // 60000
+        secs = (song.length_ms // 1000) % 60
+        return f"{mins}:{secs:02d}"
 
-        artist_segment = f" - {display_artist}" if display_artist else ""
-        length_segment = f" [{length_str}]" if length_str else ""
-        item = QListWidgetItem(f"{display_name}{artist_segment}{length_segment}")
+    def _format_nps_value(self, value: float) -> str:
+        """Format an NPS value, trimming unnecessary trailing zeros."""
 
-        lower_official = self._lower_official_enabled()
+        text = f"{value:.1f}"
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
+
+    def _compose_song_tooltip(
+        self,
+        song: Song,
+        *,
+        length_str: Optional[str] = None,
+        display_artist: Optional[str] = None,
+        display_charter: Optional[str] = None,
+        display_genre: Optional[str] = None,
+        lower_official: Optional[bool] = None,
+        weight_by_nps: Optional[bool] = None,
+    ) -> str:
+        """Build the tooltip text showing song metadata and scoring details."""
+
+        if length_str is None:
+            length_str = self._format_length(song)
+        if display_artist is None:
+            display_artist = strip_color_tags(song.artist)
+        if display_genre is None:
+            display_genre = strip_color_tags(song.genre) if getattr(song, "genre", "") else ""
+        if display_charter is None:
+            display_charter = strip_color_tags(song.charter)
+        if lower_official is None:
+            lower_official = self._lower_official_enabled()
+        if weight_by_nps is None:
+            weight_by_nps = self._weight_by_nps_enabled()
+
         details = []
         if display_artist:
             details.append(f"Artist: {display_artist}")
@@ -836,10 +876,39 @@ class MainWindow(QMainWindow):
         adj_diff = effective_diff(song, lower_official)
         difficulty_text = f"D{adj_diff}" if adj_diff is not None else "Unknown"
         details.append(f"Difficulty: {difficulty_text}")
-        details.append(f"Score: {int(effective_score(song, lower_official))}")
+        score_value = int(effective_score(song, lower_official, weight_by_nps=weight_by_nps))
+        details.append(f"Score: {score_value}")
         if length_str:
             details.append(f"Length: {length_str}")
-        item.setToolTip("\n".join(details))
+        avg = getattr(song, "nps_avg", 0.0) or 0.0
+        peak = getattr(song, "nps_peak", 0.0) or 0.0
+        details.append(f"Avg NPS: {self._format_nps_value(avg)}")
+        details.append(f"Peak NPS: {self._format_nps_value(peak)}")
+        return "\n".join(details)
+
+    def _build_song_item(self, song: Song) -> QListWidgetItem:
+        """Create a list item with display text and metadata tooltip."""
+
+        length_str = self._format_length(song)
+        display_name = strip_color_tags(song.name)
+        display_artist = strip_color_tags(song.artist)
+        display_charter = strip_color_tags(song.charter)
+        display_genre = strip_color_tags(song.genre) if getattr(song, "genre", "") else ""
+
+        artist_segment = f" - {display_artist}" if display_artist else ""
+        length_segment = f" [{length_str}]" if length_str else ""
+        item = QListWidgetItem(f"{display_name}{artist_segment}{length_segment}")
+
+        tooltip = self._compose_song_tooltip(
+            song,
+            length_str=length_str,
+            display_artist=display_artist,
+            display_charter=display_charter,
+            display_genre=display_genre,
+            lower_official=self._lower_official_enabled(),
+            weight_by_nps=self._weight_by_nps_enabled(),
+        )
+        item.setToolTip(tooltip)
         item.setData(Qt.UserRole, song)
         return item
 
@@ -851,6 +920,7 @@ class MainWindow(QMainWindow):
             return []
 
         lower_official = self._lower_official_enabled()
+        weight_by_nps = self._weight_by_nps_enabled()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
         query = ""
@@ -880,7 +950,12 @@ class MainWindow(QMainWindow):
                 continue
             filtered.append(song)
 
-        filtered.sort(key=lambda song: (effective_score(song, lower_official), (song.name or "").lower()))
+        filtered.sort(
+            key=lambda song: (
+                effective_score(song, lower_official, weight_by_nps=weight_by_nps),
+                (song.name or "").lower(),
+            )
+        )
         return filtered
 
     def _refresh_library_view(self) -> None:
@@ -891,6 +966,25 @@ class MainWindow(QMainWindow):
         for s in self._eligible_library_songs(apply_search_filter=True, query_mode=query_mode):
             item = self._build_song_item(s)
             self.lib_list.addItem(item)
+
+    def _refresh_tier_tooltips(self) -> None:
+        """Update tier item tooltips to reflect current scoring preferences."""
+
+        if not getattr(self, "tiers_widgets", None):
+            return
+        lower_official = self._lower_official_enabled()
+        weight_by_nps = self._weight_by_nps_enabled()
+        for tier in self.tiers_widgets:
+            for row in range(tier.count()):
+                item = tier.item(row)
+                song = item.data(Qt.UserRole)
+                if isinstance(song, Song):
+                    tooltip = self._compose_song_tooltip(
+                        song,
+                        lower_official=lower_official,
+                        weight_by_nps=weight_by_nps,
+                    )
+                    item.setToolTip(tooltip)
 
     def pick_folder(self) -> None:
         """Prompt the user to select a Clone Hero songs directory."""
@@ -980,11 +1074,12 @@ class MainWindow(QMainWindow):
             query_mode="artist_only" if use_artist_mode else "library",
         )
         lower_official = self._lower_official_enabled()
+        weight_by_nps = self._weight_by_nps_enabled()
         tier_candidates = [
             replace(
                 s,
                 diff_guitar=effective_diff(s, lower_official),
-                score=effective_score(s, lower_official),
+                score=effective_score(s, lower_official, weight_by_nps=weight_by_nps),
             )
             for s in songs
         ]
