@@ -1,20 +1,22 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Fixing MIDI NPS computation
+# Topic: Ensuring mido is available for MIDI scanning
 
 ## User desires
-Ensure the MIDI NPS parser yields real Avg/Peak values by tolerating malformed bytes, choosing the correct guitar track, and counting shifted-lane gems.
+Make onboarding seamless by documenting dependencies, shipping a requirements file, and automatically installing `mido` at runtime if it is missing so `.mid` scans never fail.
 
 ## Specifics of user desires
-Update `compute_chart_nps_mid` so it opens files with `clip=True`, builds tempo data while recording track metadata, prioritises guitar-labelled tracks ("PART GUITAR", "T1 GEMS", "NOTES"), falls back to the longest note track, and normalises note lanes via modulo 12 before computing Clone Hero-style chord NPS.
+Add a `requirements.txt` that lists external libraries (notably `PySide6` and `mido`), update the README installation steps to point to `pip install -r requirements.txt`, and modify `ch_career_mode/__main__.py` to attempt importing `mido`, auto-install it with pip when unavailable, and retry the import so the GUI can launch successfully.
 
 ## Actions taken
-- Reworked the MIDI parsing loop to collect tempo changes alongside track names, note counts, and lengths for better selection heuristics.
-- Added priority keyword matching with a longest-track fallback and modulo-12 note normalisation before deduplicating chord ticks.
-- Loaded MIDI files with `clip=True` and reused `_compute_nps_from_ticks` to output Avg/Peak NPS, then recompiled the package with `python -m compileall ch_career_mode`.
+- Created `requirements.txt` with `PySide6` and `mido` so developers can install everything in one step.
+- Adjusted the README installation instructions to recommend `pip install -r requirements.txt`.
+- Added `_ensure_mido_installed()` in `__main__.py` that imports `mido`, installs it on demand via pip when absent, and reruns the import before creating the Qt application.
+- Verified the package compiles by running `python -m compileall ch_career_mode` and committed the changes.
 
 ## Helpful hints about conversation & relevant code paths:
-- All adjustments live in `ch_career_mode/scanner.py`, inside `compute_chart_nps_mid` and the shared `_compute_nps_from_ticks` helper.
-- Scan worker logic already reuses `compute_chart_nps`, so improvements automatically flow into cache refreshes and UI consumers.
+- `requirements.txt` at the project root now tracks runtime dependencies.
+- The README installation section documents the new workflow for setting up dependencies.
+- `ch_career_mode/__main__.py` contains the runtime auto-install guard for `mido`.
 
 With this context in mind, I have a follow up query:

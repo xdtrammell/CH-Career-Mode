@@ -40,7 +40,7 @@ progression experience of Guitar Hero and Rock Band, while offering flexible cus
 
 3. Install dependencies:
    ```powershell
-   pip install -U pip PySide6
+   pip install -r requirements.txt
    ```
 
 4. Run the app:
