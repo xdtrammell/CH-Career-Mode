@@ -3,6 +3,7 @@
 import configparser
 import os
 import sqlite3
+import sys
 from typing import Dict, List, Optional, Set, Tuple
 
 from PySide6.QtCore import QObject, Signal
@@ -13,8 +14,10 @@ PRIORITY = ["notes.chart", "notes.mid", "song.chart", "song.mid"]
 
 
 def _project_root() -> str:
-    """Return the absolute path to the repository root."""
+    """Return the absolute path to the repository root or executable directory."""
 
+    if getattr(sys, "frozen", False) and hasattr(sys, "executable"):
+        return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
 
