@@ -1,21 +1,20 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Extending NPS support to MIDI files
+# Topic: Fixing MIDI NPS computation
 
 ## User desires
-Enhance the existing Clone Hero-style notes-per-second integration so MIDI (`.mid`) charts are parsed alongside `.chart` files, letting cached scans and UI tooling report Avg/Peak NPS for either format.
+Ensure the MIDI NPS parser yields real Avg/Peak values by tolerating malformed bytes, choosing the correct guitar track, and counting shifted-lane gems.
 
 ## Specifics of user desires
-Refactor the scanner's NPS helper into a dispatcher that calls separate parsers for `.chart` and `.mid` files. Implement the MIDI parser using `mido` to read `ticks_per_beat`, collect tempo changes, locate the guitar track by name, and compute chord-mode Avg/Peak NPS. Ensure the scan cache backfills missing NPS for either extension and that difficulty weighting/tooltips automatically benefit from the broader coverage.
+Update `compute_chart_nps_mid` so it opens files with `clip=True`, builds tempo data while recording track metadata, prioritises guitar-labelled tracks ("PART GUITAR", "T1 GEMS", "NOTES"), falls back to the longest note track, and normalises note lanes via modulo 12 before computing Clone Hero-style chord NPS.
 
 ## Actions taken
-- Wrapped `compute_chart_nps` in an extension-aware dispatcher and extracted shared tick-to-time math into `_compute_nps_from_ticks` for reuse.
-- Added `compute_chart_nps_mid` to load MIDI charts with `mido`, build the tempo map, identify the guitar track (with a fallback to the densest note track), and compute chord-based Avg/Peak NPS.
-- Updated cache hydration and fresh scan paths so `.chart` and `.mid` songs both call the dispatcher, repopulating missing NPS rows when needed.
-- Ran `python -m compileall ch_career_mode` to confirm the modules compile after the refactor.
+- Reworked the MIDI parsing loop to collect tempo changes alongside track names, note counts, and lengths for better selection heuristics.
+- Added priority keyword matching with a longest-track fallback and modulo-12 note normalisation before deduplicating chord ticks.
+- Loaded MIDI files with `clip=True` and reused `_compute_nps_from_ticks` to output Avg/Peak NPS, then recompiled the package with `python -m compileall ch_career_mode`.
 
 ## Helpful hints about conversation & relevant code paths:
-- The dispatcher, helper, and MIDI parser live in `ch_career_mode/scanner.py` (`compute_chart_nps`, `_compute_nps_from_ticks`, `compute_chart_nps_mid`).
-- Cached scans backfill NPS within `ScanWorker.run`; GUI weighting/tooltip code already consumes the cached metrics without additional changes.
+- All adjustments live in `ch_career_mode/scanner.py`, inside `compute_chart_nps_mid` and the shared `_compute_nps_from_ticks` helper.
+- Scan worker logic already reuses `compute_chart_nps`, so improvements automatically flow into cache refreshes and UI consumers.
 
 With this context in mind, I have a follow up query:

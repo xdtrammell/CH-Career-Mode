@@ -284,65 +284,75 @@ def compute_chart_nps_mid(chart_path: str) -> Tuple[float, float]:
         return 0.0, 0.0
 
     try:
-        mid = mido.MidiFile(chart_path)
+        mid = mido.MidiFile(chart_path, clip=True)
     except Exception:
         return 0.0, 0.0
 
     ticks_per_beat = max(1, getattr(mid, "ticks_per_beat", 480) or 480)
 
     tempo_changes: List[Tuple[int, float]] = []
+    track_stats: List[Tuple[object, str, int, int]] = []  # (track, name, note_count, end_tick)
+
     for track in mid.tracks:
         tick = 0
+        track_name = ""
+        note_count = 0
         for msg in track:
             tick += msg.time
-            if msg.is_meta and msg.type == "set_tempo":
-                us_per_beat = getattr(msg, "tempo", 0)
-                if us_per_beat and us_per_beat > 0:
-                    seconds_per_tick = us_per_beat / 1_000_000.0 / ticks_per_beat
-                    tempo_changes.append((tick, seconds_per_tick))
+            if msg.is_meta:
+                if msg.type == "set_tempo":
+                    us_per_beat = getattr(msg, "tempo", 0)
+                    if us_per_beat and us_per_beat > 0:
+                        seconds_per_tick = us_per_beat / 1_000_000.0 / ticks_per_beat
+                        tempo_changes.append((tick, seconds_per_tick))
+                elif msg.type == "track_name" and not track_name:
+                    track_name = (msg.name or "").strip()
+            elif msg.type == "note_on" and msg.velocity and msg.velocity > 0:
+                note_count += 1
+        track_stats.append((track, track_name, note_count, tick))
 
-    target_keywords = (
-        "part guitar",
-        "part guitar coop",
-        "part lead",
-        "part rhythm",
-        "guitar",
-    )
-
+    preferred_keywords = ["part guitar", "t1 gems", "notes"]
     guitar_track = None
-    for track in mid.tracks:
-        track_name = ""
-        for msg in track:
-            if msg.is_meta and msg.type == "track_name":
-                track_name = (msg.name or "").strip()
+
+    for keyword in preferred_keywords:
+        for track, name, note_count, _ in track_stats:
+            if note_count <= 0 or not name:
+                continue
+            if keyword in name.lower():
+                guitar_track = track
                 break
-        if track_name and any(keyword in track_name.lower() for keyword in target_keywords):
-            guitar_track = track
+        if guitar_track is not None:
             break
 
     if guitar_track is None:
-        fallback_track = None
-        fallback_notes = 0
-        for track in mid.tracks:
-            note_count = 0
-            for msg in track:
-                if not msg.is_meta and msg.type == "note_on" and msg.velocity and msg.velocity > 0:
-                    note_count += 1
-            if note_count > fallback_notes:
-                fallback_notes = note_count
-                fallback_track = track
-        if fallback_track is None or fallback_notes == 0:
+        fallback: Optional[Tuple[object, str, int, int]] = None
+        for stats in track_stats:
+            track, _, note_count, end_tick = stats
+            if note_count <= 0:
+                continue
+            if fallback is None or end_tick > fallback[3]:
+                fallback = stats
+        if fallback is None:
             return 0.0, 0.0
-        guitar_track = fallback_track
+        guitar_track = fallback[0]
 
-    note_ticks: List[int] = []
+    raw_note_ticks: List[int] = []
+    normalized_ticks: List[int] = []
     tick = 0
     for msg in guitar_track:
         tick += msg.time
-        if not msg.is_meta and msg.type == "note_on" and msg.velocity and msg.velocity > 0:
-            note_ticks.append(tick)
+        if msg.is_meta or msg.type != "note_on" or not msg.velocity or msg.velocity <= 0:
+            continue
+        raw_note_ticks.append(tick)
+        try:
+            note_value = msg.note
+        except AttributeError:
+            note_value = None
+        if note_value is not None and note_value % 12 in {0, 1, 2, 3, 4}:
+            normalized_ticks.append(tick)
 
-    chord_ticks = sorted(set(note_ticks))
+    source_ticks = normalized_ticks if normalized_ticks else raw_note_ticks
+    chord_ticks = sorted(set(source_ticks))
     if not chord_ticks:
         return 0.0, 0.0
 
