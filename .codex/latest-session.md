@@ -1,21 +1,21 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Integrating NPS metrics into difficulty scoring
+# Topic: Extending NPS support to MIDI files
 
 ## User desires
-Add Clone Hero-style notes-per-second metrics to the scan cache and expose an optional setting that weights song difficulty/score by the computed Avg/Peak NPS values. Surface the NPS numbers in song tooltips.
+Enhance the existing Clone Hero-style notes-per-second integration so MIDI (`.mid`) charts are parsed alongside `.chart` files, letting cached scans and UI tooling report Avg/Peak NPS for either format.
 
 ## Specifics of user desires
-Parse `.chart` files to compute average and peak NPS using Clone Hero's chord-based method, cache the values during scans, and re-use them from SQLite on subsequent runs. Provide a "Weight Difficulty by NPS" toggle that modifies the score formula (`base + avg*2 + peak*0.5`) for tiering/sorting when enabled, without changing existing behaviour when disabled. Update tooltips to display Avg/Peak NPS alongside other metadata.
+Refactor the scanner's NPS helper into a dispatcher that calls separate parsers for `.chart` and `.mid` files. Implement the MIDI parser using `mido` to read `ticks_per_beat`, collect tempo changes, locate the guitar track by name, and compute chord-mode Avg/Peak NPS. Ensure the scan cache backfills missing NPS for either extension and that difficulty weighting/tooltips automatically benefit from the broader coverage.
 
 ## Actions taken
-- Added NPS fields to the `Song` dataclass and updated `effective_score` to apply the weighting formula when requested.
-- Extended `ScanWorker` to parse `.chart` files (`compute_chart_nps`), persist `nps_avg`/`nps_peak` in the cache, and hydrate cached songs with the stored values.
-- Introduced the GUI setting/checkbox for weighting by NPS, adjusted library sorting, tier auto-arrange logic, and tooltips to respect the toggle, and surfaced Avg/Peak NPS in tooltips.
-- Ran `python -m compileall ch_career_mode` to ensure the updated modules compile.
+- Wrapped `compute_chart_nps` in an extension-aware dispatcher and extracted shared tick-to-time math into `_compute_nps_from_ticks` for reuse.
+- Added `compute_chart_nps_mid` to load MIDI charts with `mido`, build the tempo map, identify the guitar track (with a fallback to the densest note track), and compute chord-based Avg/Peak NPS.
+- Updated cache hydration and fresh scan paths so `.chart` and `.mid` songs both call the dispatcher, repopulating missing NPS rows when needed.
+- Ran `python -m compileall ch_career_mode` to confirm the modules compile after the refactor.
 
 ## Helpful hints about conversation & relevant code paths:
-- NPS parsing lives in `ch_career_mode/scanner.py::compute_chart_nps`, and cache schema updates store the metrics.
-- The weighting toggle and tooltip formatting are handled inside `ch_career_mode/gui.py` (see `_compose_song_tooltip`, `_refresh_tier_tooltips`, and `_weight_by_nps_enabled`).
+- The dispatcher, helper, and MIDI parser live in `ch_career_mode/scanner.py` (`compute_chart_nps`, `_compute_nps_from_ticks`, `compute_chart_nps_mid`).
+- Cached scans backfill NPS within `ScanWorker.run`; GUI weighting/tooltip code already consumes the cached metrics without additional changes.
 
 With this context in mind, I have a follow up query:

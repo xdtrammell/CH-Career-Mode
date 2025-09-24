@@ -111,6 +111,17 @@ def md5_file(path: str) -> str:
 
 
 def compute_chart_nps(chart_path: str) -> Tuple[float, float]:
+    """Dispatch to the appropriate NPS parser based on file extension."""
+
+    lower = chart_path.lower()
+    if lower.endswith(".chart"):
+        return compute_chart_nps_chart(chart_path)
+    if lower.endswith(".mid"):
+        return compute_chart_nps_mid(chart_path)
+    return 0.0, 0.0
+
+
+def compute_chart_nps_chart(chart_path: str) -> Tuple[float, float]:
     """Parse a .chart file and compute average and peak notes-per-second."""
 
     resolution = 192
@@ -207,25 +218,37 @@ def compute_chart_nps(chart_path: str) -> Tuple[float, float]:
         return 0.0, 0.0
 
     note_ticks = sorted(note_ticks_set)
+    default_seconds_per_tick = (60.0 / 120.0) / max(1, resolution)
+    return _compute_nps_from_ticks(note_ticks, tempo_changes, default_seconds_per_tick)
+
+
+def _compute_nps_from_ticks(
+    note_ticks: List[int],
+    tempo_changes: List[Tuple[int, float]],
+    default_seconds_per_tick: float,
+) -> Tuple[float, float]:
+    """Convert note ticks and tempo data into average and peak NPS values."""
+
+    if not note_ticks:
+        return 0.0, 0.0
     if len(note_ticks) < 2:
         return 0.0, float(len(note_ticks))
 
-    tempo_changes.sort(key=lambda item: item[0])
-    if not tempo_changes:
-        default_seconds_per_tick = (60.0 / 120.0) / resolution
-        tempo_changes = [(0, default_seconds_per_tick)]
-    elif tempo_changes[0][0] > 0:
-        tempo_changes.insert(0, (0, tempo_changes[0][1]))
+    sorted_tempos = sorted(tempo_changes, key=lambda item: item[0])
+    if not sorted_tempos:
+        sorted_tempos = [(0, default_seconds_per_tick)]
+    elif sorted_tempos[0][0] > 0:
+        sorted_tempos.insert(0, (0, sorted_tempos[0][1]))
 
     times: List[float] = []
     accumulated = 0.0
-    prev_tick = tempo_changes[0][0]
-    seconds_per_tick = tempo_changes[0][1]
+    prev_tick = sorted_tempos[0][0]
+    seconds_per_tick = sorted_tempos[0][1]
     tempo_index = 1
 
     for tick in note_ticks:
-        while tempo_index < len(tempo_changes) and tempo_changes[tempo_index][0] <= tick:
-            change_tick, new_spt = tempo_changes[tempo_index]
+        while tempo_index < len(sorted_tempos) and sorted_tempos[tempo_index][0] <= tick:
+            change_tick, new_spt = sorted_tempos[tempo_index]
             accumulated += max(0, change_tick - prev_tick) * seconds_per_tick
             prev_tick = change_tick
             seconds_per_tick = new_spt
@@ -250,6 +273,81 @@ def compute_chart_nps(chart_path: str) -> Tuple[float, float]:
             peak = window
 
     return float(avg_nps), float(peak)
+
+
+def compute_chart_nps_mid(chart_path: str) -> Tuple[float, float]:
+    """Parse a MIDI file and compute average and peak notes-per-second."""
+
+    try:
+        import mido
+    except ImportError:
+        return 0.0, 0.0
+
+    try:
+        mid = mido.MidiFile(chart_path)
+    except Exception:
+        return 0.0, 0.0
+
+    ticks_per_beat = max(1, getattr(mid, "ticks_per_beat", 480) or 480)
+
+    tempo_changes: List[Tuple[int, float]] = []
+    for track in mid.tracks:
+        tick = 0
+        for msg in track:
+            tick += msg.time
+            if msg.is_meta and msg.type == "set_tempo":
+                us_per_beat = getattr(msg, "tempo", 0)
+                if us_per_beat and us_per_beat > 0:
+                    seconds_per_tick = us_per_beat / 1_000_000.0 / ticks_per_beat
+                    tempo_changes.append((tick, seconds_per_tick))
+
+    target_keywords = (
+        "part guitar",
+        "part guitar coop",
+        "part lead",
+        "part rhythm",
+        "guitar",
+    )
+
+    guitar_track = None
+    for track in mid.tracks:
+        track_name = ""
+        for msg in track:
+            if msg.is_meta and msg.type == "track_name":
+                track_name = (msg.name or "").strip()
+                break
+        if track_name and any(keyword in track_name.lower() for keyword in target_keywords):
+            guitar_track = track
+            break
+
+    if guitar_track is None:
+        fallback_track = None
+        fallback_notes = 0
+        for track in mid.tracks:
+            note_count = 0
+            for msg in track:
+                if not msg.is_meta and msg.type == "note_on" and msg.velocity and msg.velocity > 0:
+                    note_count += 1
+            if note_count > fallback_notes:
+                fallback_notes = note_count
+                fallback_track = track
+        if fallback_track is None or fallback_notes == 0:
+            return 0.0, 0.0
+        guitar_track = fallback_track
+
+    note_ticks: List[int] = []
+    tick = 0
+    for msg in guitar_track:
+        tick += msg.time
+        if not msg.is_meta and msg.type == "note_on" and msg.velocity and msg.velocity > 0:
+            note_ticks.append(tick)
+
+    chord_ticks = sorted(set(note_ticks))
+    if not chord_ticks:
+        return 0.0, 0.0
+
+    default_seconds_per_tick = (60.0 / 120.0) / ticks_per_beat
+    return _compute_nps_from_ticks(chord_ticks, tempo_changes, default_seconds_per_tick)
 
 
 
@@ -346,7 +444,7 @@ class ScanWorker(QObject):
                     raw_nps_peak = row2[11] if len(row2) > 11 else None
                     if (
                         chart_path_cached
-                        and chart_path_cached.lower().endswith(".chart")
+                        and chart_path_cached.lower().endswith((".chart", ".mid"))
                         and (raw_nps_avg is None or raw_nps_peak is None)
                     ):
                         computed_avg, computed_peak = compute_chart_nps(chart_path_cached)
@@ -415,7 +513,7 @@ class ScanWorker(QObject):
             score = difficulty_score(diff_guitar, length_ms)
             nps_avg = 0.0
             nps_peak = 0.0
-            if chart and chart.lower().endswith(".chart"):
+            if chart and chart.lower().endswith((".chart", ".mid")):
                 nps_avg, nps_peak = compute_chart_nps(chart)
 
             s = Song(
