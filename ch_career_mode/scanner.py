@@ -599,7 +599,8 @@ class ScanWorker(QObject):
             completed = 0
             if not self._stop and total_jobs > 0:
                 self.message.emit("Computing chart NPS in background...")
-                max_workers = max(1, int((os.cpu_count() or 1) * 0.8))
+                cpu_count = os.cpu_count() or 1
+                max_workers = max(1, cpu_count - 2)
                 max_workers = max(1, min(max_workers, total_jobs))
                 try:
                     executor = ProcessPoolExecutor(max_workers=max_workers)

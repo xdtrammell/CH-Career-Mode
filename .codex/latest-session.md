@@ -1,22 +1,20 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Ensuring mido is available for MIDI scanning
+# Topic: Dial back CPU usage of background NPS scanning
 
 ## User desires
-Make onboarding seamless by documenting dependencies, shipping a requirements file, and automatically installing `mido` at runtime if it is missing so `.mid` scans never fail.
+Reduce CPU contention during background NPS calculations by leaving spare cores idle and keeping the UI responsive.
 
 ## Specifics of user desires
-Add a `requirements.txt` that lists external libraries (notably `PySide6` and `mido`), update the README installation steps to point to `pip install -r requirements.txt`, and modify `ch_career_mode/__main__.py` to attempt importing `mido`, auto-install it with pip when unavailable, and retry the import so the GUI can launch successfully.
+Adjust the worker pool sizing so that the scanner uses at most `os.cpu_count() - 2` workers (with a minimum of one), optionally smoothing CPU spikes, while preserving the faster background scan behavior.
 
 ## Actions taken
-- Created `requirements.txt` with `PySide6` and `mido` so developers can install everything in one step.
-- Adjusted the README installation instructions to recommend `pip install -r requirements.txt`.
-- Added `_ensure_mido_installed()` in `__main__.py` that imports `mido`, installs it on demand via pip when absent, and reruns the import before creating the Qt application.
-- Verified the package compiles by running `python -m compileall ch_career_mode` and committed the changes.
+- Updated `ScanWorker`'s background executor configuration to derive its worker count from `os.cpu_count() - 2` while respecting the total number of jobs.
+- Recompiled the package with `python -m compileall ch_career_mode` to ensure syntax correctness.
+- Committed the changes with a message indicating the spare core reservation for NPS scanning.
 
 ## Helpful hints about conversation & relevant code paths:
-- `requirements.txt` at the project root now tracks runtime dependencies.
-- The README installation section documents the new workflow for setting up dependencies.
-- `ch_career_mode/__main__.py` contains the runtime auto-install guard for `mido`.
+- `ch_career_mode/scanner.py` houses the worker pool sizing logic for the background NPS phase.
+- The executor initialization now stores the detected CPU count and subtracts two when selecting a worker limit.
 
 With this context in mind, I have a follow up query:
