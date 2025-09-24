@@ -3,7 +3,7 @@
 import configparser
 import os
 import sqlite3
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from PySide6.QtCore import QObject, Signal
 
@@ -110,6 +110,256 @@ def md5_file(path: str) -> str:
     return h.hexdigest().upper()
 
 
+def compute_chart_nps(chart_path: str) -> Tuple[float, float]:
+    """Dispatch to the appropriate NPS parser based on file extension."""
+
+    lower = chart_path.lower()
+    if lower.endswith(".chart"):
+        return compute_chart_nps_chart(chart_path)
+    if lower.endswith(".mid"):
+        return compute_chart_nps_mid(chart_path)
+    return 0.0, 0.0
+
+
+def compute_chart_nps_chart(chart_path: str) -> Tuple[float, float]:
+    """Parse a .chart file and compute average and peak notes-per-second."""
+
+    resolution = 192
+    tempo_changes: List[Tuple[int, float]] = []  # (tick, seconds_per_tick)
+    notes_by_section: Dict[str, Set[int]] = {}
+
+    try:
+        with open(chart_path, "r", encoding="utf-8", errors="ignore") as fh:
+            lines = fh.readlines()
+    except OSError:
+        return 0.0, 0.0
+
+    current_section: Optional[str] = None
+    in_section = False
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("//"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line[1:-1].strip().lower()
+            in_section = False
+            continue
+        if line.startswith("{"):
+            in_section = True
+            continue
+        if line.startswith("}"):
+            in_section = False
+            current_section = None
+            continue
+        if not in_section or not current_section:
+            continue
+
+        if current_section == "song":
+            if line.lower().startswith("resolution") and "=" in line:
+                try:
+                    _, value = line.split("=", 1)
+                    resolution = max(1, int(value.strip()))
+                except ValueError:
+                    pass
+            continue
+
+        if current_section == "synctrack":
+            if "=" not in line:
+                continue
+            left, right = line.split("=", 1)
+            try:
+                tick = int(left.strip())
+            except ValueError:
+                continue
+            parts = right.strip().split()
+            if len(parts) < 2 or parts[0].lower() != "b":
+                continue
+            try:
+                bpm_raw = float(parts[1])
+            except ValueError:
+                continue
+            bpm = bpm_raw / 1000.0
+            if bpm <= 0:
+                continue
+            seconds_per_tick = (60.0 / bpm) / resolution
+            tempo_changes.append((tick, seconds_per_tick))
+            continue
+
+        section_key = current_section.lower()
+        if "=" not in line:
+            continue
+        left, right = line.split("=", 1)
+        parts = right.strip().split()
+        if not parts or parts[0].lower() != "n":
+            continue
+        try:
+            tick = int(left.strip())
+        except ValueError:
+            continue
+        notes_by_section.setdefault(section_key, set()).add(tick)
+
+    if not notes_by_section:
+        return 0.0, 0.0
+
+    def _pick_section(sections: Dict[str, Set[int]]) -> Optional[Set[int]]:
+        difficulty_order = ["expert", "hard", "medium", "easy"]
+        for diff in difficulty_order:
+            single_matches = [ticks for name, ticks in sections.items() if diff in name and "single" in name]
+            if single_matches:
+                return max(single_matches, key=lambda t: len(t))
+            generic_matches = [ticks for name, ticks in sections.items() if diff in name]
+            if generic_matches:
+                return max(generic_matches, key=lambda t: len(t))
+        return next(iter(sections.values()), None)
+
+    note_ticks_set = _pick_section(notes_by_section)
+    if not note_ticks_set:
+        return 0.0, 0.0
+
+    note_ticks = sorted(note_ticks_set)
+    default_seconds_per_tick = (60.0 / 120.0) / max(1, resolution)
+    return _compute_nps_from_ticks(note_ticks, tempo_changes, default_seconds_per_tick)
+
+
+def _compute_nps_from_ticks(
+    note_ticks: List[int],
+    tempo_changes: List[Tuple[int, float]],
+    default_seconds_per_tick: float,
+) -> Tuple[float, float]:
+    """Convert note ticks and tempo data into average and peak NPS values."""
+
+    if not note_ticks:
+        return 0.0, 0.0
+    if len(note_ticks) < 2:
+        return 0.0, float(len(note_ticks))
+
+    sorted_tempos = sorted(tempo_changes, key=lambda item: item[0])
+    if not sorted_tempos:
+        sorted_tempos = [(0, default_seconds_per_tick)]
+    elif sorted_tempos[0][0] > 0:
+        sorted_tempos.insert(0, (0, sorted_tempos[0][1]))
+
+    times: List[float] = []
+    accumulated = 0.0
+    prev_tick = sorted_tempos[0][0]
+    seconds_per_tick = sorted_tempos[0][1]
+    tempo_index = 1
+
+    for tick in note_ticks:
+        while tempo_index < len(sorted_tempos) and sorted_tempos[tempo_index][0] <= tick:
+            change_tick, new_spt = sorted_tempos[tempo_index]
+            accumulated += max(0, change_tick - prev_tick) * seconds_per_tick
+            prev_tick = change_tick
+            seconds_per_tick = new_spt
+            tempo_index += 1
+        times.append(accumulated + (tick - prev_tick) * seconds_per_tick)
+
+    if not times:
+        return 0.0, 0.0
+
+    first_time = times[0]
+    last_time = times[-1]
+    duration = last_time - first_time
+    avg_nps = 0.0 if duration <= 0 else len(times) / duration
+
+    peak = 0
+    left = 0
+    for right, t in enumerate(times):
+        while left <= right and t - times[left] > 1.0:
+            left += 1
+        window = right - left + 1
+        if window > peak:
+            peak = window
+
+    return float(avg_nps), float(peak)
+
+
+def compute_chart_nps_mid(chart_path: str) -> Tuple[float, float]:
+    """Parse a MIDI file and compute average and peak notes-per-second."""
+
+    try:
+        import mido
+    except ImportError:
+        return 0.0, 0.0
+
+    try:
+        mid = mido.MidiFile(chart_path, clip=True)
+    except Exception:
+        return 0.0, 0.0
+
+    ticks_per_beat = max(1, getattr(mid, "ticks_per_beat", 480) or 480)
+
+    tempo_changes: List[Tuple[int, float]] = []
+    track_stats: List[Tuple[object, str, int, int]] = []  # (track, name, note_count, end_tick)
+
+    for track in mid.tracks:
+        tick = 0
+        track_name = ""
+        note_count = 0
+        for msg in track:
+            tick += msg.time
+            if msg.is_meta:
+                if msg.type == "set_tempo":
+                    us_per_beat = getattr(msg, "tempo", 0)
+                    if us_per_beat and us_per_beat > 0:
+                        seconds_per_tick = us_per_beat / 1_000_000.0 / ticks_per_beat
+                        tempo_changes.append((tick, seconds_per_tick))
+                elif msg.type == "track_name" and not track_name:
+                    track_name = (msg.name or "").strip()
+            elif msg.type == "note_on" and msg.velocity and msg.velocity > 0:
+                note_count += 1
+        track_stats.append((track, track_name, note_count, tick))
+
+    preferred_keywords = ["part guitar", "t1 gems", "notes"]
+    guitar_track = None
+
+    for keyword in preferred_keywords:
+        for track, name, note_count, _ in track_stats:
+            if note_count <= 0 or not name:
+                continue
+            if keyword in name.lower():
+                guitar_track = track
+                break
+        if guitar_track is not None:
+            break
+
+    if guitar_track is None:
+        fallback: Optional[Tuple[object, str, int, int]] = None
+        for stats in track_stats:
+            track, _, note_count, end_tick = stats
+            if note_count <= 0:
+                continue
+            if fallback is None or end_tick > fallback[3]:
+                fallback = stats
+        if fallback is None:
+            return 0.0, 0.0
+        guitar_track = fallback[0]
+
+    raw_note_ticks: List[int] = []
+    normalized_ticks: List[int] = []
+    tick = 0
+    for msg in guitar_track:
+        tick += msg.time
+        if msg.is_meta or msg.type != "note_on" or not msg.velocity or msg.velocity <= 0:
+            continue
+        raw_note_ticks.append(tick)
+        try:
+            note_value = msg.note
+        except AttributeError:
+            note_value = None
+        if note_value is not None and note_value % 12 in {0, 1, 2, 3, 4}:
+            normalized_ticks.append(tick)
+
+    source_ticks = normalized_ticks if normalized_ticks else raw_note_ticks
+    chord_ticks = sorted(set(source_ticks))
+    if not chord_ticks:
+        return 0.0, 0.0
+
+    default_seconds_per_tick = (60.0 / 120.0) / ticks_per_beat
+    return _compute_nps_from_ticks(chord_ticks, tempo_changes, default_seconds_per_tick)
+
+
 
 class ScanWorker(QObject):
     progress = Signal(int)
@@ -143,15 +393,18 @@ class ScanWorker(QObject):
                 chart_path TEXT,
                 chart_md5 TEXT,
                 score REAL,
-                genre TEXT
+                genre TEXT,
+                nps_avg REAL,
+                nps_peak REAL
             )
             """
         )
         conn.commit()
-        try:
-            cur.execute("ALTER TABLE songs ADD COLUMN genre TEXT")
-        except sqlite3.OperationalError:
-            pass
+        for column, col_type in (("genre", "TEXT"), ("nps_avg", "REAL"), ("nps_peak", "REAL")):
+            try:
+                cur.execute(f"ALTER TABLE songs ADD COLUMN {column} {col_type}")
+            except sqlite3.OperationalError:
+                pass
 
 
         total_dirs = sum(1 for _ in os.walk(self.root))
@@ -184,7 +437,7 @@ class ScanWorker(QObject):
             row = cur.fetchone()
             if row and abs(row[0] - mtime) < 1e-6:
                 cur.execute(
-                    "SELECT name,artist,charter,genre,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score FROM songs WHERE path=?",
+                    "SELECT name,artist,charter,genre,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,nps_avg,nps_peak FROM songs WHERE path=?",
                     (ini_path,),
                 )
                 row2 = cur.fetchone()
@@ -196,6 +449,24 @@ class ScanWorker(QObject):
                         if cached_genre:
                             cur.execute("UPDATE songs SET genre=? WHERE path=?", (cached_genre, ini_path))
                             conn.commit()
+                    chart_path_cached = row2[7]
+                    raw_nps_avg = row2[10] if len(row2) > 10 else None
+                    raw_nps_peak = row2[11] if len(row2) > 11 else None
+                    if (
+                        chart_path_cached
+                        and chart_path_cached.lower().endswith((".chart", ".mid"))
+                        and (raw_nps_avg is None or raw_nps_peak is None)
+                    ):
+                        computed_avg, computed_peak = compute_chart_nps(chart_path_cached)
+                        raw_nps_avg = computed_avg
+                        raw_nps_peak = computed_peak
+                        cur.execute(
+                            "UPDATE songs SET nps_avg=?, nps_peak=? WHERE path=?",
+                            (raw_nps_avg, raw_nps_peak, ini_path),
+                        )
+                        conn.commit()
+                    nps_avg = float(raw_nps_avg) if raw_nps_avg is not None else 0.0
+                    nps_peak = float(raw_nps_peak) if raw_nps_peak is not None else 0.0
                     s = Song(
                         path=ini_path,
                         name=strip_color_tags(row2[0]),
@@ -205,9 +476,11 @@ class ScanWorker(QObject):
                         length_ms=row2[4],
                         diff_guitar=row2[5],
                         is_very_long=bool(row2[6]),
-                        chart_path=row2[7],
+                        chart_path=chart_path_cached,
                         chart_md5=row2[8],
                         score=row2[9] or 0.0,
+                        nps_avg=nps_avg,
+                        nps_peak=nps_peak,
                     )
                     chart_md5 = (s.chart_md5 or "").strip()  # Use cached MD5 to filter duplicates in-memory
                     if chart_md5 and chart_md5 in seen_md5:
@@ -248,6 +521,10 @@ class ScanWorker(QObject):
                 continue
             chart_md5 = md5_file(chart) if chart else None
             score = difficulty_score(diff_guitar, length_ms)
+            nps_avg = 0.0
+            nps_peak = 0.0
+            if chart and chart.lower().endswith((".chart", ".mid")):
+                nps_avg, nps_peak = compute_chart_nps(chart)
 
             s = Song(
                 path=ini_path,
@@ -261,6 +538,8 @@ class ScanWorker(QObject):
                 chart_md5=chart_md5,
                 score=score,
                 genre=genre,
+                nps_avg=nps_avg,
+                nps_peak=nps_peak,
             )
             duplicate_md5 = chart_md5.strip() if chart_md5 else ""  # Hash for deduplication within this run  # Track duplicates encountered during this run
             include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
@@ -270,7 +549,7 @@ class ScanWorker(QObject):
                     seen_md5.add(duplicate_md5)
 
             cur.execute(
-                "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre,nps_avg,nps_peak) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     ini_path,
                     mtime,
@@ -284,6 +563,8 @@ class ScanWorker(QObject):
                     s.chart_md5,
                     s.score,
                     s.genre,
+                    s.nps_avg,
+                    s.nps_peak,
                 ),
             )
             conn.commit()

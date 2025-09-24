@@ -40,10 +40,17 @@ def effective_diff(song: 'Song', lower_official: bool) -> Optional[int]:
 
 
 
-def effective_score(song: 'Song', lower_official: bool) -> float:
-    """Compute the song score with any requested charter adjustment applied."""
+def effective_score(song: 'Song', lower_official: bool, *, weight_by_nps: bool = False) -> float:
+    """Compute the song score with charter adjustment and optional NPS weighting."""
+
     adj_diff = effective_diff(song, lower_official)
-    return difficulty_score(adj_diff, song.length_ms)
+    base = difficulty_score(adj_diff, song.length_ms)
+    if not weight_by_nps:
+        return base
+
+    avg = getattr(song, "nps_avg", 0.0) or 0.0
+    peak = getattr(song, "nps_peak", 0.0) or 0.0
+    return base + avg * 2.0 + peak * 0.5
 
 
 @dataclass
@@ -61,6 +68,8 @@ class Song:
     chart_md5: Optional[str]
     score: float
     genre: str = ""
+    nps_avg: float = 0.0
+    nps_peak: float = 0.0
 
     def __post_init__(self) -> None:
         self.name = strip_color_tags(self.name)
