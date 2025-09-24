@@ -1,22 +1,21 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Ensuring mido is available for MIDI scanning
+# Topic: Parallelizing the library scanner for faster multi-core performance
 
 ## User desires
-Make onboarding seamless by documenting dependencies, shipping a requirements file, and automatically installing `mido` at runtime if it is missing so `.mid` scans never fail.
+Improve Clone Hero library scanning performance on large collections without changing existing metadata, caching, or song ordering behavior.
 
 ## Specifics of user desires
-Add a `requirements.txt` that lists external libraries (notably `PySide6` and `mido`), update the README installation steps to point to `pip install -r requirements.txt`, and modify `ch_career_mode/__main__.py` to attempt importing `mido`, auto-install it with pip when unavailable, and retry the import so the GUI can launch successfully.
+Introduce parallel processing so multiple song folders are scanned simultaneously while keeping SQLite writes safe, maintaining GUI responsiveness, and preserving current scoring, ordering, and caching semantics.
 
 ## Actions taken
-- Created `requirements.txt` with `PySide6` and `mido` so developers can install everything in one step.
-- Adjusted the README installation instructions to recommend `pip install -r requirements.txt`.
-- Added `_ensure_mido_installed()` in `__main__.py` that imports `mido`, installs it on demand via pip when absent, and reruns the import before creating the Qt application.
-- Verified the package compiles by running `python -m compileall ch_career_mode` and committed the changes.
+- Added a thread pool in `ch_career_mode/scanner.py` to distribute folder scans across CPU cores while retaining the existing ScanWorker/QThread structure.
+- Created a helper to process individual song folders that mirrors the original metadata, MD5, and NPS parsing logic.
+- Batched SQLite writes on the main thread, preserved duplicate filtering order, and kept periodic GUI progress updates intact.
+- Ran `python -m compileall ch_career_mode` to confirm the module compiles.
 
 ## Helpful hints about conversation & relevant code paths:
-- `requirements.txt` at the project root now tracks runtime dependencies.
-- The README installation section documents the new workflow for setting up dependencies.
-- `ch_career_mode/__main__.py` contains the runtime auto-install guard for `mido`.
+- Parallel scanning logic lives in `ch_career_mode/scanner.py`, especially the new `_scan_song_folder` helper and updated `ScanWorker.run` implementation.
+- Thread pool size defaults to `min(8, os.cpu_count())` and results are re-ordered to match the original traversal before emitting to the GUI.
 
 With this context in mind, I have a follow up query:
