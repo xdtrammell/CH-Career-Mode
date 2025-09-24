@@ -445,11 +445,12 @@ class ScanWorker(QObject):
     message = Signal(str)
     done = Signal(list)
 
-    def __init__(self, root: str, cache_db: str):
+    def __init__(self, root: str, cache_db: str, *, max_workers: Optional[int] = None):
         super().__init__()
         self.root = root
         self.cache_db = cache_db
         self._stop = False
+        self._max_workers_override = max_workers
 
     def stop(self) -> None:
         self._stop = True
@@ -523,7 +524,16 @@ class ScanWorker(QObject):
                     conn.commit()
                     pending_commits = 0
 
-        max_workers = max(1, min(8, os.cpu_count() or 1))
+        if self._max_workers_override is not None:
+            try:
+                max_workers = int(self._max_workers_override)
+            except (TypeError, ValueError):
+                max_workers = 0
+            if max_workers <= 0:
+                max_workers = 1
+        else:
+            cpu_count = os.cpu_count() or 1
+            max_workers = max(1, int(cpu_count * 0.75))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             for dirpath, dirnames, filenames in os.walk(self.root):
                 if self._stop:
