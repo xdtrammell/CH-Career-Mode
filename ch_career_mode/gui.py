@@ -4,7 +4,7 @@ import math
 import os
 import random
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 from dataclasses import replace
 
 from PySide6.QtCore import Qt, QSize, QSettings, QThread
@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QFrame,
     QGraphicsDropShadowEffect,
+    QProgressBar,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -317,6 +318,8 @@ class MainWindow(QMainWindow):
             self.settings.remove("root_folder")
 
         self.library: List[Song] = []
+        self._songs_by_path: Dict[str, Song] = {}
+        self._nps_jobs_total = 0
         self.tiers_widgets: List[TierList] = []
         self.tier_wrappers: List[QWidget] = []
         self._list_delegates: List[CompactItemDelegate] = []
@@ -350,7 +353,14 @@ class MainWindow(QMainWindow):
         weight_by_nps_setting = bool(self.settings.value("weight_by_nps", False, type=bool))
         self.chk_weight_nps = QCheckBox("Weight Difficulty by NPS")
         self.chk_weight_nps.setChecked(weight_by_nps_setting)
-        self.chk_weight_nps.setToolTip("Adds Avg/Peak NPS to the difficulty score when enabled.")
+        self._default_weight_nps_tooltip = "Adds Avg/Peak NPS to the difficulty score when enabled."
+        self.chk_weight_nps.setToolTip(self._default_weight_nps_tooltip)
+        self.nps_progress_bar = QProgressBar()
+        self.nps_progress_bar.setRange(0, 1)
+        self.nps_progress_bar.setValue(0)
+        self.nps_progress_bar.setTextVisible(True)
+        self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
+        self.nps_progress_bar.setVisible(False)
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
@@ -448,6 +458,7 @@ class MainWindow(QMainWindow):
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
         form.addRow(self.chk_weight_nps)
+        form.addRow(self.nps_progress_bar)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
@@ -505,6 +516,16 @@ class MainWindow(QMainWindow):
     def _weight_by_nps_enabled(self) -> bool:
         """Return whether difficulty scores should include NPS weighting."""
         return self.chk_weight_nps.isChecked()
+
+
+    def _set_weight_nps_enabled(self, enabled: bool) -> None:
+        """Enable or disable the NPS weighting checkbox with contextual tooltip."""
+
+        if not hasattr(self, "chk_weight_nps"):
+            return
+        tooltip = self._default_weight_nps_tooltip if enabled else "Available after NPS scan completes"
+        self.chk_weight_nps.setEnabled(enabled)
+        self.chk_weight_nps.setToolTip(tooltip)
 
 
     def _update_size_constraints(self) -> None:
@@ -986,6 +1007,58 @@ class MainWindow(QMainWindow):
                     )
                     item.setToolTip(tooltip)
 
+    def _on_nps_progress(self, completed: int, total: int) -> None:
+        """Update the background NPS progress bar as jobs finish."""
+
+        if not hasattr(self, "nps_progress_bar"):
+            return
+        self._nps_jobs_total = max(0, total)
+        safe_total = max(0, total)
+        safe_completed = max(0, min(completed, safe_total if safe_total else completed))
+        if safe_total <= 0:
+            self.nps_progress_bar.setVisible(False)
+            self.nps_progress_bar.setRange(0, 1)
+            self.nps_progress_bar.setValue(0)
+            self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
+            return
+        self.nps_progress_bar.setVisible(True)
+        self.nps_progress_bar.setRange(0, safe_total)
+        self.nps_progress_bar.setValue(safe_completed)
+        self.nps_progress_bar.setFormat(f"NPS scan: {safe_completed} / {safe_total}")
+
+    def _on_nps_update(self, song_path: str, avg: float, peak: float) -> None:
+        """Store freshly computed NPS values for a song."""
+
+        song = self._songs_by_path.get(song_path)
+        if not song:
+            return
+        song.nps_avg = avg or 0.0
+        song.nps_peak = peak or 0.0
+
+    def _on_nps_done(self) -> None:
+        """Handle completion (or cancellation) of the background NPS scan."""
+
+        self._set_weight_nps_enabled(True)
+        if hasattr(self, "nps_progress_bar"):
+            if self._nps_jobs_total <= 0:
+                self.nps_progress_bar.setVisible(False)
+                self.nps_progress_bar.setRange(0, 1)
+                self.nps_progress_bar.setValue(0)
+                self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
+            else:
+                self.nps_progress_bar.setVisible(True)
+                self.nps_progress_bar.setRange(0, self._nps_jobs_total)
+                current = self.nps_progress_bar.value()
+                if current >= self._nps_jobs_total:
+                    self.nps_progress_bar.setValue(self._nps_jobs_total)
+                    self.nps_progress_bar.setFormat("NPS scan complete")
+                else:
+                    self.nps_progress_bar.setFormat(
+                        f"NPS scan cancelled ({current} / {self._nps_jobs_total})"
+                    )
+        self._refresh_library_view()
+        self._refresh_tier_tooltips()
+
     def pick_folder(self) -> None:
         """Prompt the user to select a Clone Hero songs directory."""
         initial_dir = self.root_folder if self.root_folder and os.path.isdir(self.root_folder) else os.path.expanduser("~")
@@ -1040,12 +1113,23 @@ class MainWindow(QMainWindow):
         self.worker = ScanWorker(self.root_folder, cache_db)
         self.worker.moveToThread(self.thread)
 
+        self._songs_by_path = {}
+        self._nps_jobs_total = 0
+        self.nps_progress_bar.setVisible(False)
+        self.nps_progress_bar.setRange(0, 1)
+        self.nps_progress_bar.setValue(0)
+        self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
+        self._set_weight_nps_enabled(False)
+
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.message.connect(self.progress.setLabelText)
         self.worker.done.connect(self._scan_finished)
-        self.worker.done.connect(self.thread.quit)
-        self.worker.done.connect(self.worker.deleteLater)
+        self.worker.nps_progress.connect(self._on_nps_progress)
+        self.worker.nps_update.connect(self._on_nps_update)
+        self.worker.nps_done.connect(self._on_nps_done)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
         self.progress.canceled.connect(self.worker.stop)
 
@@ -1055,9 +1139,13 @@ class MainWindow(QMainWindow):
     def _scan_finished(self, songs: List[Song]) -> None:
         """Handle completion of the background scan and refresh the UI."""
         self.library = songs
+        self._songs_by_path = {song.path: song for song in songs}
         self._refresh_library_view()
         self.progress.close()
-        QMessageBox.information(self, "Scan complete", f"Found {len(songs)} eligible songs.")
+        extra_note = ""
+        if self._nps_jobs_total > 0:
+            extra_note = "\nNPS values are still being computed in the background."
+        QMessageBox.information(self, "Scan complete", f"Found {len(songs)} eligible songs.{extra_note}")
 
     def auto_arrange(self) -> None:
         """Generate a new set of tiers using the current configuration."""
