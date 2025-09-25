@@ -1,20 +1,20 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: PyInstaller compatibility for multiprocessing launch
+# Topic: PyInstaller entry point wrapper for background scans
 
 ## User desires
-Prepare the application for PyInstaller builds so that multiprocessing workers do not create extra GUI windows on Windows.
+Create a dedicated PyInstaller-friendly launcher so frozen builds avoid spawning extra GUI windows while keeping normal `python -m ch_career_mode` execution unchanged.
 
 ## Specifics of user desires
-Wrap the module entry point in an `if __name__ == "__main__"` guard, call `multiprocessing.freeze_support()` within it, and document that this is for PyInstaller + Windows compatibility while keeping the existing startup flow intact.
+Add a root-level `app_entry.py` that imports `main` from `ch_career_mode.__main__`, wraps execution in an `if __name__ == "__main__"` block with `multiprocessing.freeze_support()`, and document that it's solely for PyInstaller on Windows. Update README build instructions to point PyInstaller at the new script.
 
 ## Actions taken
-- Imported `multiprocessing` in `ch_career_mode/__main__.py` and guarded the launch code with a freeze support call.
-- Added a clarifying comment noting the change is to support PyInstaller-generated executables without altering normal execution.
-- Re-ran `python -m compileall ch_career_mode` to confirm the module still compiles cleanly.
+- Added `app_entry.py` with the freeze-support guard and explanatory comment while delegating to the package main function.
+- Updated the README to reference the new PyInstaller command (`pyinstaller --noconsole --onefile app_entry.py`).
+- Re-ran `python -m compileall ch_career_mode` to ensure the package still compiles without syntax issues.
 
 ## Helpful hints about conversation & relevant code paths:
-- `ch_career_mode/__main__.py` hosts the package entry point executed by `python -m ch_career_mode` and PyInstaller builds.
-- `multiprocessing.freeze_support()` is required when freezing multiprocessing code on Windows to prevent duplicate process launches.
+- `app_entry.py` should be used when building Windows executables with PyInstaller to avoid multiprocessing GUI duplication.
+- `ch_career_mode/__main__.py` remains the entry point for standard module execution (`python -m ch_career_mode`).
 
 With this context in mind, I have a follow up query:
