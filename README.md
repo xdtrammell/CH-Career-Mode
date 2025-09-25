@@ -1,120 +1,109 @@
 # Clone Hero Career Mode Builder
 
-A modern tool for creating **career-style setlists** for [Clone Hero](https://clonehero.net/).  
-This project automatically scans your song library, groups tracks into difficulty-based tiers, 
-and exports native `.setlist` files compatible with Clone Hero. It aims to replicate the 
-progression experience of Guitar Hero and Rock Band, while offering flexible customization.
+Clone Hero Career Mode Builder is a desktop tool that helps you design and export custom **career mode setlists** for [Clone Hero](https://clonehero.net/). It scans your Clone Hero songs library, automatically evaluates difficulty, and arranges songs into tiers that feel authentic to the classic Guitar Hero career progression.
 
----
+## Features
 
-## ✨ Features
+- 🎵 **Song Library Scanner**
+  - Recursively scans your Clone Hero `songs` folder.
+  - Extracts metadata (title, artist, charter, genre, length, difficulty).
+  - Detects chart files (`.chart`, `.mid`) and verifies guitar parts exist.
+  - Computes **Average and Peak Notes Per Second (NPS)** for true difficulty scoring.
+  - Caches results in a local SQLite database for faster re-scans.
 
-- **Auto-scanning**: Recursively scans your Clone Hero `Songs/` folder and caches metadata.
-- **Difficulty scoring**: Calculates song difficulty using `diff_guitar` and track length.
-- **Tier builder**: Generates multi-tier setlists (e.g., 6–20 tiers) with ascending difficulty.
-- **Genre grouping**: Optional toggle to group songs in each tier by genre family.
-- **Artist cap**: Limit how many tracks per artist can appear in a tier.
-- **Min difficulty filter**: Exclude trivial charts (diff 1–2) from tiers.
-- **Meme filter**: Toggle to exclude meme-tagged genres from auto-arrange.
-- **Official chart adjustment**: Option to lower Harmonix/Neversoft charts by 1 difficulty step.
-- **Drag-and-drop GUI**: Rearrange tiers and songs manually with a modern Qt interface.
-- **Export setlists**: Creates native `.setlist` files for Clone Hero (binary MD5 format).
+- 📊 **Smart Difficulty Scoring**
+  - Combines in-game difficulty ratings with song length and NPS values.
+  - Optionally lowers Harmonix/Neversoft official chart difficulties for balance.
+  - Marks and handles very long tracks differently when tiering.
 
----
+- 🏆 **Automatic Tiering**
+  - Auto-assigns songs into configurable tiers (like Guitar Hero setlists).
+  - Options for:
+    - Number of tiers and songs per tier
+    - Genre grouping for balanced tiers
+    - Limiting duplicate artists per tier
+    - Keeping meme songs out of progression
+    - Enforcing minimum difficulty per tier
+    - Special “Artist Career Mode” to generate a career for one artist only
 
-## 📦 Installation
+- 🎨 **Tier Naming Themes**
+  - Built-in presets inspired by Guitar Hero careers (GH1, GH2, etc.).
+  - Procedural generator for fresh tier names each run.
+  - Custom/manual tier names supported.
 
-### Running from Source (Python 3.10+)
+- 🖱️ **Drag-and-Drop GUI**
+  - Modern Qt-based interface (PySide6).
+  - Search, filter, and drag songs between library and tiers.
+  - Double-click to remove songs from tiers.
+  - Adjustable themes and difficulty settings with instant feedback.
 
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/yourusername/CH-Career-Mode.git
-   cd CH-Career-Mode
-   ```
+- 📦 **Export to Clone Hero**
+  - Exports arranged tiers into valid `.setlist` binary files.
+  - Option to export one combined setlist or one `.setlist` per tier.
+  - Includes built-in validation of setlist integrity.
 
-2. Create and activate a virtual environment:
-   ```powershell
-   py -3 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
+- ⚡ **Performance Optimizations**
+  - Caches scan results and only updates changed songs.
+  - Deduplicates charts by MD5 hash.
+  - Runs scanning in a background thread with progress feedback.
 
-3. Install dependencies:
-   ```powershell
-   pip install -r requirements.txt
-   ```
+## Installation
 
-4. Run the app:
-   ```powershell
-   python -m ch_career_mode
-   ```
+Clone the repository and install dependencies:
 
-### Windows EXE (no Python required)
-
-Prebuilt executables are available under **Releases**.  
-Just download the `.exe` and run it.
-
----
-
-## 🚀 Usage
-
-1. Launch the program.  
-2. Select your Clone Hero `Songs` folder.  
-3. Click **Scan** to load your library.  
-4. Use **Auto-Arrange** to generate career tiers.  
-   - Enable/disable toggles for genre grouping, meme filter, min difficulty, etc.  
-5. Drag and drop songs if desired.  
-6. Click **Export Setlist** to save `.setlist` files.  
-   - Export all tiers separately or as one combined career setlist.  
-
----
-
-## ⚙️ Settings
-
-- **Tiers / Songs per Tier** – Controls structure of the setlist.  
-- **Group songs in tiers by genre** – Keeps each tier genre-cohesive.  
-- **Min difficulty** – Exclude easy beginner tracks.  
-- **Max tracks by artist per tier** – Prevents tiers dominated by one band.  
-- **Exclude meme songs** – Skips meme-tagged content.  
-- **Lower official chart difficulty** – Treat Harmonix/Neversoft charts as 1 step easier.  
-
-All preferences persist between runs via QSettings.
-
----
-
-## 🛠 Development
-
-This project is organized into modules with separation of concerns:
-
-- `core.py` – Data models, constants, difficulty scoring.  
-- `scanner.py` – Library scanning, song.ini parsing, cache (SQLite).  
-- `tiering.py` – Auto-arrange logic, genre grouping, constraints.  
-- `exporter.py` – Clone Hero `.setlist` binary writer/reader.  
-- `gui.py` – PySide6 Qt interface and widgets.  
-- `__main__.py` – Entrypoint to launch the app.  
-
-Build a standalone executable with PyInstaller:
-```powershell
-pyinstaller --noconsole --onefile app_entry.py
+```bash
+git clone https://github.com/xdtrammell/CH-Career-Mode.git
+cd CH-Career-Mode
+pip install -r requirements.txt
 ```
 
----
+### Requirements
+- Python 3.9+
+- [PySide6](https://pypi.org/project/PySide6/)
+- [mido](https://pypi.org/project/mido/) (installed automatically if missing)
+- Standard library modules (sqlite3, configparser, etc.)
 
-## 📈 Roadmap
+## Usage
 
-- Web-based version (hosted) for easier sharing.  
-- More advanced difficulty models (note density, BPM).  
-- Smarter genre-family weighting across tiers.  
-- Theme customization for venues / set names.  
+### Run from source
 
----
+```bash
+python -m ch_career_mode
+```
 
-## 🤝 Contributing
+### Executable build (optional)
 
-Pull requests and feature suggestions are welcome!  
-Open an issue if you find bugs or have ideas.
+You can bundle the project into a standalone `.exe` with **PyInstaller**:
 
----
+```bash
+pyinstaller --clean --noconfirm -w -F CH_Career_Mode_Setlist_Gen.py --name CH_Career_Builder --hidden-import mido
+```
 
-## 📜 License
+The generated executable will launch the GUI directly.
 
-MIT License © 2025 YourName
+### Inside the App
+
+1. Pick your Clone Hero songs folder.
+2. Click **Scan** to build your library.
+3. Adjust filters (difficulty, meme songs, genre grouping, etc.).
+4. Click **Auto-Arrange** to generate tiers, or drag songs manually.
+5. Export your custom career mode as `.setlist` files.
+
+## Configuration
+
+Settings are saved automatically between runs using Qt’s built-in `QSettings`. This includes:
+- Last used songs folder
+- Tier theme and counts
+- Difficulty filters
+- Meme/official chart toggles
+- Artist mode
+
+Cache data (songs metadata and NPS values) is stored in `.cache/songs.sqlite` in the project or executable directory.
+
+## Contributing
+
+Contributions are welcome! Whether it’s fixing bugs, improving performance, or suggesting new features, feel free to open an issue or PR.
+
+## License
+
+This project is released under the MIT License. See [LICENSE](LICENSE) for details.
