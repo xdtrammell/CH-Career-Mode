@@ -76,7 +76,7 @@ python -m ch_career_mode
 You can bundle the project into a standalone `.exe` with **PyInstaller**:
 
 ```bash
-pyinstaller --clean --noconfirm -w -F CH_Career_Mode_Setlist_Gen.py --name CH_Career_Builder --hidden-import mido
+pyinstaller --clean --noconfirm -w -F app_entry.py --name CH_Career_Builder --hidden-import mido
 ```
 
 The generated executable will launch the GUI directly.
