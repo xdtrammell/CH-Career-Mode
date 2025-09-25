@@ -1,37 +1,68 @@
-# Codex Session Notes
+# Codex Development Log Instructions
 
-## Track your most recent session notes in `.codex/latest-session.md`
-If this file does not exist go ahead and create it. (MANDATORY)
+## Purpose
+The `.codex/latest-session.md` file is used as an **ongoing development log**, preserving the full history of sessions, actions, and reasoning behind decisions. This enables traceability over time, so contributors (and automated systems) can understand why changes were made.
 
-During all sessions, keep a record of the discussion happening in a markdown file called `.codex/latest-session.md`.
+## File Location
+- Path: `.codex/latest-session.md`
+- Must be checked into version control.
 
-That markdown file should have the format:
+## Logging Format
+Each new session **appends** to the end of `.codex/latest-session.md` using the following structure:
 
 ```
-The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
+# Session <number> — <date/time>
 
-# Topic: <discussion topic>
+## Topic
+<Discussion topic for this session>
 
-## User desires
-<Brief description of what the user wants, the overall purpose and goal>
+## User Desires
+<Brief description of what the user wanted, the overall purpose and goal>
 
-## Specifics of user desires
-<More detailed version of the above, with details about what the user is looking for>
+## Specifics of User Desires
+<Expanded version with relevant details and context>
 
-## Actions taken
-<List of steps taken to help the user>
+## Actions Taken
+<List of steps taken during this session>
 
-## Helpful hints about conversation & relevant code paths:
-<List of hints or codepaths that were particularly informative or helpful during the session>
-
-With this context in mind, I have a follow up query:
-```
+## Helpful Hints
+<Key code paths, insights, or debugging notes that were informative>
 
 ---
+```
 
-## Session-notes rule (MANDATORY)
+## Rules
+1. **Do not overwrite** the `.codex/latest-session.md` file. Always **append new entries**.
+2. Each session should increment the session number sequentially.
+3. Include a timestamp (`YYYY-MM-DD HH:MM`) in the header.
+4. Separate sessions with a horizontal rule (`---`).
+5. Keep entries concise but detailed enough for future reference.
 
-- After **every** assistant turn the agent **MUST** update `.codex/latest-session.md` with the standard template.
-- Skipping this step is considered a violation of the instructions.
-- As we have conversations, the agent must update this file every time they complete a response, with updated details about the conversation/session to that point.
-- Ensure `.codex/latest-session.md` remains checked into version control so future sessions start with the correct template in place.
+## Example
+```
+# Session 12 — 2025-09-25 05:20
+
+## Topic
+Optimize NPS calculations for large libraries.
+
+## User Desires
+Improve scanning performance across ~20,000 songs.
+
+## Specifics of User Desires
+The user noticed that notes-per-second (NPS) calculations slowed down scanning. They want optimization strategies without breaking current tiering logic.
+
+## Actions Taken
+- Profiled scanner.py performance.
+- Suggested caching strategy for repeated NPS calculations.
+- Added notes on thread management to avoid concurrent workers.
+
+## Helpful Hints
+- SQLite lock issues can occur when multiple scan workers are alive.
+- Progress dialogs must wait for `finished` signals before re-enabling.
+
+---
+```
+This log will serve as **documentation of development decisions**. Other programs or maintainers can:
+- Parse the log for structured summaries of actions.
+- Reconstruct the rationale behind design changes.
+- Track how features evolved over time.
