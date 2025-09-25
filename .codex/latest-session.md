@@ -1,22 +1,20 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Ensuring mido is available for MIDI scanning
+# Topic: PyInstaller entry point wrapper for background scans
 
 ## User desires
-Make onboarding seamless by documenting dependencies, shipping a requirements file, and automatically installing `mido` at runtime if it is missing so `.mid` scans never fail.
+Create a dedicated PyInstaller-friendly launcher so frozen builds avoid spawning extra GUI windows while keeping normal `python -m ch_career_mode` execution unchanged.
 
 ## Specifics of user desires
-Add a `requirements.txt` that lists external libraries (notably `PySide6` and `mido`), update the README installation steps to point to `pip install -r requirements.txt`, and modify `ch_career_mode/__main__.py` to attempt importing `mido`, auto-install it with pip when unavailable, and retry the import so the GUI can launch successfully.
+Add a root-level `app_entry.py` that imports `main` from `ch_career_mode.__main__`, wraps execution in an `if __name__ == "__main__"` block with `multiprocessing.freeze_support()`, and document that it's solely for PyInstaller on Windows. Update README build instructions to point PyInstaller at the new script.
 
 ## Actions taken
-- Created `requirements.txt` with `PySide6` and `mido` so developers can install everything in one step.
-- Adjusted the README installation instructions to recommend `pip install -r requirements.txt`.
-- Added `_ensure_mido_installed()` in `__main__.py` that imports `mido`, installs it on demand via pip when absent, and reruns the import before creating the Qt application.
-- Verified the package compiles by running `python -m compileall ch_career_mode` and committed the changes.
+- Added `app_entry.py` with the freeze-support guard and explanatory comment while delegating to the package main function.
+- Updated the README to reference the new PyInstaller command (`pyinstaller --noconsole --onefile app_entry.py`).
+- Re-ran `python -m compileall ch_career_mode` to ensure the package still compiles without syntax issues.
 
 ## Helpful hints about conversation & relevant code paths:
-- `requirements.txt` at the project root now tracks runtime dependencies.
-- The README installation section documents the new workflow for setting up dependencies.
-- `ch_career_mode/__main__.py` contains the runtime auto-install guard for `mido`.
+- `app_entry.py` should be used when building Windows executables with PyInstaller to avoid multiprocessing GUI duplication.
+- `ch_career_mode/__main__.py` remains the entry point for standard module execution (`python -m ch_career_mode`).
 
 With this context in mind, I have a follow up query:

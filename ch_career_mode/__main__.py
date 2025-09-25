@@ -1,6 +1,7 @@
 """Executable entry point for launching the GUI application."""
 
 import importlib
+import multiprocessing
 import subprocess
 import sys
 
@@ -30,4 +31,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Required for PyInstaller + Windows multiprocessing builds so child
+    # processes do not spawn duplicate GUI windows; regular execution is
+    # otherwise unchanged.
+    multiprocessing.freeze_support()
     main()

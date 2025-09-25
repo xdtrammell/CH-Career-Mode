@@ -92,9 +92,9 @@ This project is organized into modules with separation of concerns:
 - `gui.py` – PySide6 Qt interface and widgets.  
 - `__main__.py` – Entrypoint to launch the app.  
 
-Build a standalone executable with:
+Build a standalone executable with PyInstaller:
 ```powershell
-pyinstaller --clean --noconfirm -w -F .\CH_Career_Mode_Setlist_Gen.py
+pyinstaller --noconsole --onefile app_entry.py
 ```
 
 ---

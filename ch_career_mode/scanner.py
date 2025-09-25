@@ -4,6 +4,7 @@ import configparser
 import os
 import sqlite3
 import sys
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from typing import Dict, List, Optional, Set, Tuple
 
 from PySide6.QtCore import QObject, Signal
@@ -364,216 +365,306 @@ def compute_chart_nps_mid(chart_path: str) -> Tuple[float, float]:
 
 
 
+def _compute_nps_job(payload: Tuple[str, str]) -> Tuple[str, float, float]:
+    """Helper executed in worker pools that returns the NPS for a chart."""
+
+    ini_path, chart_path = payload
+    avg, peak = compute_chart_nps(chart_path)
+    return ini_path, avg, peak
+
+
 class ScanWorker(QObject):
     progress = Signal(int)
     message = Signal(str)
     done = Signal(list)
+    nps_progress = Signal(int, int)
+    nps_update = Signal(str, float, float)
+    nps_done = Signal()
+    finished = Signal()
 
     def __init__(self, root: str, cache_db: str):
         super().__init__()
         self.root = root
         self.cache_db = cache_db
         self._stop = False
+        self._executor = None
 
     def stop(self) -> None:
         self._stop = True
+        executor = self._executor
+        if executor is not None:
+            try:
+                executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            finally:
+                self._executor = None
 
     def run(self) -> None:
         os.makedirs(os.path.dirname(self.cache_db), exist_ok=True)
         conn = sqlite3.connect(self.cache_db)
         cur = conn.cursor()
-        cur.execute(
-            """
-            CREATE TABLE IF NOT EXISTS songs (
-                path TEXT PRIMARY KEY,
-                mtime REAL,
-                name TEXT,
-                artist TEXT,
-                charter TEXT,
-                length_ms INTEGER,
-                diff_guitar INTEGER,
-                is_very_long INTEGER,
-                chart_path TEXT,
-                chart_md5 TEXT,
-                score REAL,
-                genre TEXT,
-                nps_avg REAL,
-                nps_peak REAL
-            )
-            """
-        )
-        conn.commit()
-        for column, col_type in (("genre", "TEXT"), ("nps_avg", "REAL"), ("nps_peak", "REAL")):
-            try:
-                cur.execute(f"ALTER TABLE songs ADD COLUMN {column} {col_type}")
-            except sqlite3.OperationalError:
-                pass
-
-
-        total_dirs = sum(1 for _ in os.walk(self.root))
-        processed_dirs = 0
-        results: List[Song] = []
-        seen_md5: Set[str] = set()  # Track chart hashes to avoid duplicates
-
-        for dirpath, dirnames, filenames in os.walk(self.root):
-            if self._stop:
-                break
-            processed_dirs += 1
-            if processed_dirs % 100 == 0:
-                self.progress.emit(int(processed_dirs / max(1, total_dirs) * 100))
-
-            ini_name = None
-            for candidate in ("song.ini", "Song.ini"):
-                if candidate in filenames:
-                    ini_name = candidate
-                    break
-            if not ini_name:
-                continue
-            ini_path = os.path.join(dirpath, ini_name)
-
-            try:
-                mtime = os.path.getmtime(ini_path)
-            except Exception:
-                continue
-
-            cur.execute("SELECT mtime FROM songs WHERE path=?", (ini_path,))
-            row = cur.fetchone()
-            if row and abs(row[0] - mtime) < 1e-6:
-                cur.execute(
-                    "SELECT name,artist,charter,genre,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,nps_avg,nps_peak FROM songs WHERE path=?",
-                    (ini_path,),
-                )
-                row2 = cur.fetchone()
-                if row2:
-                    cached_genre = strip_color_tags(row2[3] or "")
-                    if not cached_genre:
-                        ini_data = read_song_ini(ini_path)
-                        cached_genre = strip_color_tags(ini_data.get("genre")) if ini_data else ""
-                        if cached_genre:
-                            cur.execute("UPDATE songs SET genre=? WHERE path=?", (cached_genre, ini_path))
-                            conn.commit()
-                    chart_path_cached = row2[7]
-                    raw_nps_avg = row2[10] if len(row2) > 10 else None
-                    raw_nps_peak = row2[11] if len(row2) > 11 else None
-                    if (
-                        chart_path_cached
-                        and chart_path_cached.lower().endswith((".chart", ".mid"))
-                        and (raw_nps_avg is None or raw_nps_peak is None)
-                    ):
-                        computed_avg, computed_peak = compute_chart_nps(chart_path_cached)
-                        raw_nps_avg = computed_avg
-                        raw_nps_peak = computed_peak
-                        cur.execute(
-                            "UPDATE songs SET nps_avg=?, nps_peak=? WHERE path=?",
-                            (raw_nps_avg, raw_nps_peak, ini_path),
-                        )
-                        conn.commit()
-                    nps_avg = float(raw_nps_avg) if raw_nps_avg is not None else 0.0
-                    nps_peak = float(raw_nps_peak) if raw_nps_peak is not None else 0.0
-                    s = Song(
-                        path=ini_path,
-                        name=strip_color_tags(row2[0]),
-                        artist=strip_color_tags(row2[1]),
-                        charter=strip_color_tags(row2[2]),
-                        genre=cached_genre,
-                        length_ms=row2[4],
-                        diff_guitar=row2[5],
-                        is_very_long=bool(row2[6]),
-                        chart_path=chart_path_cached,
-                        chart_md5=row2[8],
-                        score=row2[9] or 0.0,
-                        nps_avg=nps_avg,
-                        nps_peak=nps_peak,
-                    )
-                    chart_md5 = (s.chart_md5 or "").strip()  # Use cached MD5 to filter duplicates in-memory
-                    if chart_md5 and chart_md5 in seen_md5:
-                        continue
-                    if s.diff_guitar is not None and s.diff_guitar >= 1:
-                        results.append(s)
-                        if chart_md5:
-                            seen_md5.add(chart_md5)
-                    continue
-
-            data = read_song_ini(ini_path)
-            if not data:
-                continue
-
-            raw_name = data.get("name")
-            name = strip_color_tags(raw_name if raw_name else os.path.basename(dirpath))
-            artist = strip_color_tags(data.get("artist"))
-            charter = strip_color_tags(data.get("charter"))
-            genre = strip_color_tags(data.get("genre"))
-
-            try:
-                length_ms = int(float(data.get("song_length", "0")))
-            except Exception:
-                length_ms = None
-
-            diff_val = data.get("diff_guitar")
-            try:
-                diff_guitar = int(diff_val) if diff_val is not None else None
-            except Exception:
-                diff_guitar = None
-
-            if diff_guitar is None or diff_guitar <= 0:
-                continue
-
-            is_very_long = bool(length_ms and length_ms >= 7 * 60 * 1000)
-            chart = find_chart_file(dirpath)
-            if not has_guitar_part(chart):
-                continue
-            chart_md5 = md5_file(chart) if chart else None
-            score = difficulty_score(diff_guitar, length_ms)
-            nps_avg = 0.0
-            nps_peak = 0.0
-            if chart and chart.lower().endswith((".chart", ".mid")):
-                nps_avg, nps_peak = compute_chart_nps(chart)
-
-            s = Song(
-                path=ini_path,
-                name=name,
-                artist=artist,
-                charter=charter,
-                length_ms=length_ms,
-                diff_guitar=diff_guitar,
-                is_very_long=is_very_long,
-                chart_path=chart,
-                chart_md5=chart_md5,
-                score=score,
-                genre=genre,
-                nps_avg=nps_avg,
-                nps_peak=nps_peak,
-            )
-            duplicate_md5 = chart_md5.strip() if chart_md5 else ""  # Hash for deduplication within this run  # Track duplicates encountered during this run
-            include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
-            if include_song and diff_guitar is not None and diff_guitar >= 1:
-                results.append(s)
-                if duplicate_md5:
-                    seen_md5.add(duplicate_md5)
-
+        try:
             cur.execute(
-                "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre,nps_avg,nps_peak) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (
-                    ini_path,
-                    mtime,
-                    s.name,
-                    s.artist,
-                    s.charter,
-                    s.length_ms,
-                    s.diff_guitar,
-                    1 if s.is_very_long else 0,
-                    s.chart_path,
-                    s.chart_md5,
-                    s.score,
-                    s.genre,
-                    s.nps_avg,
-                    s.nps_peak,
-                ),
+                """
+                CREATE TABLE IF NOT EXISTS songs (
+                    path TEXT PRIMARY KEY,
+                    mtime REAL,
+                    name TEXT,
+                    artist TEXT,
+                    charter TEXT,
+                    length_ms INTEGER,
+                    diff_guitar INTEGER,
+                    is_very_long INTEGER,
+                    chart_path TEXT,
+                    chart_md5 TEXT,
+                    score REAL,
+                    genre TEXT,
+                    nps_avg REAL,
+                    nps_peak REAL
+                )
+                """
             )
             conn.commit()
+            for column, col_type in (("genre", "TEXT"), ("nps_avg", "REAL"), ("nps_peak", "REAL")):
+                try:
+                    cur.execute(f"ALTER TABLE songs ADD COLUMN {column} {col_type}")
+                except sqlite3.OperationalError:
+                    pass
 
-        conn.close()
-        self.progress.emit(100)
-        self.done.emit(results)
+            total_dirs = sum(1 for _ in os.walk(self.root))
+            processed_dirs = 0
+            results: List[Song] = []
+            songs_by_path: Dict[str, Song] = {}
+            pending_jobs: List[Tuple[str, str]] = []
+            seen_md5: Set[str] = set()
+
+            for dirpath, _, filenames in os.walk(self.root):
+                if self._stop:
+                    break
+                processed_dirs += 1
+                if processed_dirs % 100 == 0 or processed_dirs == total_dirs:
+                    self.progress.emit(int(processed_dirs / max(1, total_dirs) * 100))
+
+                ini_name = None
+                for candidate in ("song.ini", "Song.ini"):
+                    if candidate in filenames:
+                        ini_name = candidate
+                        break
+                if not ini_name:
+                    continue
+                ini_path = os.path.join(dirpath, ini_name)
+
+                try:
+                    mtime = os.path.getmtime(ini_path)
+                except Exception:
+                    continue
+
+                cur.execute("SELECT mtime FROM songs WHERE path=?", (ini_path,))
+                row = cur.fetchone()
+                if row and abs(row[0] - mtime) < 1e-6:
+                    cur.execute(
+                        "SELECT name,artist,charter,genre,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,nps_avg,nps_peak FROM songs WHERE path=?",
+                        (ini_path,),
+                    )
+                    row2 = cur.fetchone()
+                    if row2:
+                        cached_genre = strip_color_tags(row2[3] or "")
+                        if not cached_genre:
+                            ini_data = read_song_ini(ini_path)
+                            cached_genre = strip_color_tags(ini_data.get("genre")) if ini_data else ""
+                            if cached_genre:
+                                cur.execute("UPDATE songs SET genre=? WHERE path=?", (cached_genre, ini_path))
+                                conn.commit()
+                        chart_path_cached = row2[7]
+                        raw_nps_avg = row2[10] if len(row2) > 10 else None
+                        raw_nps_peak = row2[11] if len(row2) > 11 else None
+                        needs_nps = (
+                            chart_path_cached
+                            and chart_path_cached.lower().endswith((".chart", ".mid"))
+                            and (raw_nps_avg is None or raw_nps_peak is None)
+                        )
+                        if needs_nps:
+                            pending_jobs.append((ini_path, chart_path_cached))
+                        nps_avg = float(raw_nps_avg) if raw_nps_avg is not None else 0.0
+                        nps_peak = float(raw_nps_peak) if raw_nps_peak is not None else 0.0
+                        s = Song(
+                            path=ini_path,
+                            name=strip_color_tags(row2[0]),
+                            artist=strip_color_tags(row2[1]),
+                            charter=strip_color_tags(row2[2]),
+                            genre=cached_genre,
+                            length_ms=row2[4],
+                            diff_guitar=row2[5],
+                            is_very_long=bool(row2[6]),
+                            chart_path=chart_path_cached,
+                            chart_md5=row2[8],
+                            score=row2[9] or 0.0,
+                            nps_avg=nps_avg,
+                            nps_peak=nps_peak,
+                        )
+                        chart_md5 = (s.chart_md5 or "").strip()
+                        songs_by_path[ini_path] = s
+                        if chart_md5 and chart_md5 in seen_md5:
+                            continue
+                        if s.diff_guitar is not None and s.diff_guitar >= 1:
+                            results.append(s)
+                            if chart_md5:
+                                seen_md5.add(chart_md5)
+                        continue
+
+                data = read_song_ini(ini_path)
+                if not data:
+                    continue
+
+                raw_name = data.get("name")
+                name = strip_color_tags(raw_name if raw_name else os.path.basename(dirpath))
+                artist = strip_color_tags(data.get("artist"))
+                charter = strip_color_tags(data.get("charter"))
+                genre = strip_color_tags(data.get("genre"))
+
+                try:
+                    length_ms = int(float(data.get("song_length", "0")))
+                except Exception:
+                    length_ms = None
+
+                diff_val = data.get("diff_guitar")
+                try:
+                    diff_guitar = int(diff_val) if diff_val is not None else None
+                except Exception:
+                    diff_guitar = None
+
+                if diff_guitar is None or diff_guitar <= 0:
+                    continue
+
+                is_very_long = bool(length_ms and length_ms >= 7 * 60 * 1000)
+                chart = find_chart_file(dirpath)
+                if not has_guitar_part(chart):
+                    continue
+                chart_md5 = md5_file(chart) if chart else None
+                score = difficulty_score(diff_guitar, length_ms)
+                needs_nps = bool(chart and chart.lower().endswith((".chart", ".mid")))
+                if needs_nps:
+                    pending_jobs.append((ini_path, chart))
+
+                s = Song(
+                    path=ini_path,
+                    name=name,
+                    artist=artist,
+                    charter=charter,
+                    length_ms=length_ms,
+                    diff_guitar=diff_guitar,
+                    is_very_long=is_very_long,
+                    chart_path=chart,
+                    chart_md5=chart_md5,
+                    score=score,
+                    genre=genre,
+                    nps_avg=0.0,
+                    nps_peak=0.0,
+                )
+                songs_by_path[ini_path] = s
+                duplicate_md5 = chart_md5.strip() if chart_md5 else ""
+                include_song = not duplicate_md5 or duplicate_md5 not in seen_md5
+                if include_song and diff_guitar is not None and diff_guitar >= 1:
+                    results.append(s)
+                    if duplicate_md5:
+                        seen_md5.add(duplicate_md5)
+
+                cur.execute(
+                    "REPLACE INTO songs(path,mtime,name,artist,charter,length_ms,diff_guitar,is_very_long,chart_path,chart_md5,score,genre,nps_avg,nps_peak) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (
+                        ini_path,
+                        mtime,
+                        s.name,
+                        s.artist,
+                        s.charter,
+                        s.length_ms,
+                        s.diff_guitar,
+                        1 if s.is_very_long else 0,
+                        s.chart_path,
+                        s.chart_md5,
+                        s.score,
+                        s.genre,
+                        None if needs_nps else s.nps_avg,
+                        None if needs_nps else s.nps_peak,
+                    ),
+                )
+                conn.commit()
+
+            conn.commit()
+            total_jobs = len(pending_jobs)
+            self.progress.emit(100)
+            self.nps_progress.emit(0, total_jobs)
+            self.done.emit(results)
+            completed = 0
+            if not self._stop and total_jobs > 0:
+                self.message.emit("Computing chart NPS in background...")
+                cpu_count = os.cpu_count() or 1
+                max_workers = max(1, cpu_count - 2)
+                max_workers = max(1, min(max_workers, total_jobs))
+                try:
+                    executor = ProcessPoolExecutor(max_workers=max_workers)
+                except Exception:
+                    executor = ThreadPoolExecutor(max_workers=max_workers)
+                self._executor = executor
+                future_to_path = {
+                    executor.submit(_compute_nps_job, job): job[0] for job in pending_jobs
+                }
+                pending_futures = set(future_to_path.keys())
+                writes_since_commit = 0
+                try:
+                    while pending_futures:
+                        if self._stop:
+                            for future in pending_futures:
+                                future.cancel()
+                            break
+                        done_set, _ = wait(pending_futures, timeout=0.2, return_when=FIRST_COMPLETED)
+                        if not done_set:
+                            continue
+                        for future in done_set:
+                            pending_futures.discard(future)
+                            ini_path = future_to_path.pop(future, None)
+                            if ini_path is None or future.cancelled():
+                                continue
+                            try:
+                                path, avg, peak = future.result()
+                            except Exception:
+                                path = ini_path
+                                avg = 0.0
+                                peak = 0.0
+                            song = songs_by_path.get(path)
+                            if song:
+                                song.nps_avg = avg
+                                song.nps_peak = peak
+                            cur.execute(
+                                "UPDATE songs SET nps_avg=?, nps_peak=? WHERE path=?",
+                                (avg, peak, path),
+                            )
+                            writes_since_commit += 1
+                            if writes_since_commit >= 25:
+                                conn.commit()
+                                writes_since_commit = 0
+                            completed += 1
+                            self.nps_progress.emit(completed, total_jobs)
+                            self.nps_update.emit(path, avg, peak)
+                    if writes_since_commit:
+                        conn.commit()
+                finally:
+                    try:
+                        executor.shutdown(wait=not self._stop, cancel_futures=self._stop)
+                    except Exception:
+                        pass
+                    self._executor = None
+            elif total_jobs <= 0:
+                self.nps_progress.emit(0, 0)
+            elif self._stop and total_jobs > 0:
+                self.nps_progress.emit(completed, total_jobs)
+
+            self.nps_done.emit()
+        finally:
+            try:
+                conn.close()
+            finally:
+                self.finished.emit()
 
 
