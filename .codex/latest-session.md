@@ -18,3 +18,24 @@ Add a root-level `app_entry.py` that imports `main` from `ch_career_mode.__main_
 - `ch_career_mode/__main__.py` remains the entry point for standard module execution (`python -m ch_career_mode`).
 
 With this context in mind, I have a follow up query:
+---
+# Session 1 — 2025-09-25 09:38
+
+## Topic
+Relocate and redesign NPS scan progress bar in settings UI.
+
+## User Desires
+Make the NPS scan status more prominent and associated with the selected directory in the settings panel.
+
+## Specifics of User Desires
+- Move the existing NPS scan progress UI directly beneath the directory label in `gui.py`.
+- Ensure the progress bar spans the width of the directory label, showing progress during scans.
+- After completion, display a "NPS scan complete" label instead of the bar.
+- Remove the old small progress indicator at the bottom of the settings panel while keeping signals intact.
+
+## Actions Taken
+- Reviewed repository instructions and prepared to modify `gui.py` accordingly.
+
+## Helpful Hints
+- Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
+---

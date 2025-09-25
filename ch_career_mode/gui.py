@@ -362,6 +362,16 @@ class MainWindow(QMainWindow):
         self.nps_progress_bar.setTextVisible(True)
         self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
         self.nps_progress_bar.setVisible(False)
+        self.nps_complete_label = QLabel("NPS scan complete")
+        self.nps_complete_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.nps_complete_label.setVisible(False)
+        self.nps_status_container = QWidget()
+        nps_status_layout = QVBoxLayout(self.nps_status_container)
+        nps_status_layout.setContentsMargins(0, 0, 0, 0)
+        nps_status_layout.setSpacing(0)
+        nps_status_layout.addWidget(self.nps_progress_bar)
+        nps_status_layout.addWidget(self.nps_complete_label)
+        self.nps_status_container.setVisible(False)
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
@@ -448,6 +458,7 @@ class MainWindow(QMainWindow):
         status_row.addWidget(self.folder_status_indicator)
         status_row.addWidget(self.folder_status_label, 1)
         form.addRow(status_widget)
+        form.addRow(self.nps_status_container)
         self._update_folder_status()
         form.addRow(QLabel("Tiers:"), self.spin_tiers)
         form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
@@ -459,7 +470,6 @@ class MainWindow(QMainWindow):
         form.addRow(self.chk_exclude_meme)
         form.addRow(self.chk_lower_official)
         form.addRow(self.chk_weight_nps)
-        form.addRow(self.nps_progress_bar)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
@@ -1036,11 +1046,19 @@ class MainWindow(QMainWindow):
         safe_total = max(0, total)
         safe_completed = max(0, min(completed, safe_total if safe_total else completed))
         if safe_total <= 0:
+            if hasattr(self, "nps_status_container"):
+                self.nps_status_container.setVisible(False)
+            if hasattr(self, "nps_complete_label"):
+                self.nps_complete_label.setVisible(False)
             self.nps_progress_bar.setVisible(False)
             self.nps_progress_bar.setRange(0, 1)
             self.nps_progress_bar.setValue(0)
             self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
             return
+        if hasattr(self, "nps_status_container"):
+            self.nps_status_container.setVisible(True)
+        if hasattr(self, "nps_complete_label"):
+            self.nps_complete_label.setVisible(False)
         self.nps_progress_bar.setVisible(True)
         self.nps_progress_bar.setRange(0, safe_total)
         self.nps_progress_bar.setValue(safe_completed)
@@ -1063,18 +1081,31 @@ class MainWindow(QMainWindow):
         self._set_weight_nps_enabled(True)
         if hasattr(self, "nps_progress_bar"):
             if self._nps_jobs_total <= 0:
+                if hasattr(self, "nps_status_container"):
+                    self.nps_status_container.setVisible(False)
+                if hasattr(self, "nps_complete_label"):
+                    self.nps_complete_label.setVisible(False)
                 self.nps_progress_bar.setVisible(False)
                 self.nps_progress_bar.setRange(0, 1)
                 self.nps_progress_bar.setValue(0)
                 self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
             else:
-                self.nps_progress_bar.setVisible(True)
                 self.nps_progress_bar.setRange(0, self._nps_jobs_total)
                 current = self.nps_progress_bar.value()
                 if current >= self._nps_jobs_total:
+                    if hasattr(self, "nps_status_container"):
+                        self.nps_status_container.setVisible(True)
                     self.nps_progress_bar.setValue(self._nps_jobs_total)
-                    self.nps_progress_bar.setFormat("NPS scan complete")
+                    self.nps_progress_bar.setVisible(False)
+                    if hasattr(self, "nps_complete_label"):
+                        self.nps_complete_label.setText("NPS scan complete")
+                        self.nps_complete_label.setVisible(True)
                 else:
+                    if hasattr(self, "nps_status_container"):
+                        self.nps_status_container.setVisible(True)
+                    if hasattr(self, "nps_complete_label"):
+                        self.nps_complete_label.setVisible(False)
+                    self.nps_progress_bar.setVisible(True)
                     self.nps_progress_bar.setFormat(
                         f"NPS scan cancelled ({current} / {self._nps_jobs_total})"
                     )
@@ -1146,6 +1177,10 @@ class MainWindow(QMainWindow):
 
         self._songs_by_path = {}
         self._nps_jobs_total = 0
+        if hasattr(self, "nps_status_container"):
+            self.nps_status_container.setVisible(False)
+        if hasattr(self, "nps_complete_label"):
+            self.nps_complete_label.setVisible(False)
         self.nps_progress_bar.setVisible(False)
         self.nps_progress_bar.setRange(0, 1)
         self.nps_progress_bar.setValue(0)
