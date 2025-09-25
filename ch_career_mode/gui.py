@@ -325,6 +325,7 @@ class MainWindow(QMainWindow):
         self._list_delegates: List[CompactItemDelegate] = []
         self.current_tier_names: List[str] = []
         self._procedural_seed = None
+        self._scan_active = False
 
         self.btn_pick = QPushButton("Pick Songs Folder...")
         self.btn_scan = QPushButton("Scan (recursive)")
@@ -491,6 +492,12 @@ class MainWindow(QMainWindow):
 
         self._update_size_constraints()
 
+        self._scan_button_default_tooltip = (
+            self.btn_scan.toolTip() or "Scan your library recursively for eligible songs."
+        )
+        self._scan_disabled_tooltip = "Please wait for the current scan to finish."
+        self.btn_scan.setToolTip(self._scan_button_default_tooltip)
+
         self.btn_pick.clicked.connect(self.pick_folder)
         self.btn_scan.clicked.connect(self.scan_now)
         self.btn_auto.clicked.connect(self.auto_arrange)
@@ -516,6 +523,19 @@ class MainWindow(QMainWindow):
     def _weight_by_nps_enabled(self) -> bool:
         """Return whether difficulty scores should include NPS weighting."""
         return self.chk_weight_nps.isChecked()
+
+
+    def _set_scan_controls_enabled(self, enabled: bool) -> None:
+        """Enable or disable the Scan controls and update tooltips accordingly."""
+
+        tooltip = self._scan_button_default_tooltip if enabled else self._scan_disabled_tooltip
+        if hasattr(self, "btn_scan"):
+            self.btn_scan.setEnabled(enabled)
+            self.btn_scan.setToolTip(tooltip)
+        action = getattr(self, "scan_action", None)
+        if action is not None:
+            action.setEnabled(enabled)
+            action.setToolTip(tooltip)
 
 
     def _set_weight_nps_enabled(self, enabled: bool) -> None:
@@ -1038,6 +1058,8 @@ class MainWindow(QMainWindow):
     def _on_nps_done(self) -> None:
         """Handle completion (or cancellation) of the background NPS scan."""
 
+        self._scan_active = False
+        self._set_scan_controls_enabled(True)
         self._set_weight_nps_enabled(True)
         if hasattr(self, "nps_progress_bar"):
             if self._nps_jobs_total <= 0:
@@ -1096,6 +1118,13 @@ class MainWindow(QMainWindow):
 
     def scan_now(self) -> None:
         """Start the asynchronous library scan with progress feedback."""
+        if self._scan_active:
+            QMessageBox.information(
+                self,
+                "Scan in progress",
+                "Scan already in progress. Please wait for the current scan to finish.",
+            )
+            return
         if not self.root_folder or not os.path.isdir(self.root_folder):
             self.root_folder = None
             self.settings.remove("root_folder")
@@ -1103,6 +1132,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No folder", "Please pick your TOP-LEVEL songs folder first.")
             return
 
+        self._scan_active = True
+        self._set_scan_controls_enabled(False)
         self.progress = QProgressDialog("Scanning songs...", "Cancel", 0, 100, self)
         self.progress.setWindowModality(Qt.WindowModal)
         self.progress.setAutoClose(True)
@@ -1133,8 +1164,13 @@ class MainWindow(QMainWindow):
         self.thread.finished.connect(self.thread.deleteLater)
         self.progress.canceled.connect(self.worker.stop)
 
-        self.thread.start()
-        self.progress.show()
+        try:
+            self.thread.start()
+            self.progress.show()
+        except Exception:
+            self._scan_active = False
+            self._set_scan_controls_enabled(True)
+            raise
 
     def _scan_finished(self, songs: List[Song]) -> None:
         """Handle completion of the background scan and refresh the UI."""

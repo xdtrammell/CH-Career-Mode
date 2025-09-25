@@ -1,20 +1,20 @@
 The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
 
-# Topic: Dial back CPU usage of background NPS scanning
+# Topic: Prevent overlapping library scans during background NPS processing
 
 ## User desires
-Reduce CPU contention during background NPS calculations by leaving spare cores idle and keeping the UI responsive.
+Ensure only one `ScanWorker` runs at a time, disabling the Scan controls while background NPS jobs finish so the cache and UI stay consistent.
 
 ## Specifics of user desires
-Adjust the worker pool sizing so that the scanner uses at most `os.cpu_count() - 2` workers (with a minimum of one), optionally smoothing CPU spikes, while preserving the faster background scan behavior.
+When a scan starts, the Scan button/menu should gray out with a tooltip explaining to wait, additional scan requests should be ignored with a small notice, and the controls re-enable once the worker emits its final `nps_done` signal.
 
 ## Actions taken
-- Updated `ScanWorker`'s background executor configuration to derive its worker count from `os.cpu_count() - 2` while respecting the total number of jobs.
-- Recompiled the package with `python -m compileall ch_career_mode` to ensure syntax correctness.
-- Committed the changes with a message indicating the spare core reservation for NPS scanning.
+- Added state tracking in `MainWindow` to prevent launching another scan while one is active and to restore availability when `nps_done` fires.
+- Disabled the Scan controls and updated their tooltips during an active scan, displaying an informational dialog if the user tries to start a second scan.
+- Re-ran `python -m compileall ch_career_mode` to confirm the application still compiles after the UI updates.
 
 ## Helpful hints about conversation & relevant code paths:
-- `ch_career_mode/scanner.py` houses the worker pool sizing logic for the background NPS phase.
-- The executor initialization now stores the detected CPU count and subtracts two when selecting a worker limit.
+- `ch_career_mode/gui.py` manages Scan button state, background NPS progress handling, and user notifications.
+- The `_set_scan_controls_enabled` helper centralizes enabling/disabling both the button and any related actions.
 
 With this context in mind, I have a follow up query:
