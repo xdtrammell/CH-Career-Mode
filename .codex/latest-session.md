@@ -87,3 +87,25 @@ Ensure the tier builder remains fully visible, keep settings from collapsing, an
 - `_update_size_constraints` re-applies card minimums after state changes; call it after altering column counts or resizes.
 - Adjust `LIBRARY_MIN_WIDTH`, `SETTINGS_MIN_WIDTH`, or `TIER_COLUMN_MIN_WIDTH` for global layout tweaks without touching widget construction.
 ---
+# Session 3 — 2025-09-25 10:45
+
+## Topic
+Rollback window refactor to material-themed baseline.
+
+## User Desires
+Restore the GUI implementation to the state captured in commit e07301b after being unhappy with later adjustments.
+
+## Specifics of User Desires
+- Discard the follow-up layout tweaks introduced after the material redesign.
+- Ensure `gui.py` matches the visuals and logic present in commit e07301b.
+- Keep all existing functionality intact after rolling back.
+
+## Actions Taken
+- Fetched upstream history to locate commit e07301b requested by the user.
+- Checked out the `gui.py` snapshot from commit e07301b so the UI matches that baseline.
+- Prepared to rerun compilation checks to confirm the project still builds.
+
+## Helpful Hints
+- Future tweaks should branch from commit e07301b to preserve the material-themed baseline the user prefers.
+- Use `git fetch https://github.com/xdtrammell/CH-Career-Mode.git` to pull additional commits if more history is required.
+---

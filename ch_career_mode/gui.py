@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QProgressBar,
+    QToolBox,
     QToolButton,
 )
 
@@ -187,19 +188,19 @@ QFrame#scanProgress, QFrame#folderCard {{
     padding: 12px;
 }}
 
-QFrame#settingsSection {{
-    background-color: rgba(255, 255, 255, 0.02);
+QToolBox::tab {{
+    background-color: #141823;
+    border: none;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-}}
-QFrame#settingsSectionBody {{
-    background-color: transparent;
-}}
-QLabel#settingsSectionTitle {{
-    font-size: 10pt;
+    padding: 10px 14px;
+    margin: 2px 12px 4px 12px;
     font-weight: 600;
-    color: rgba(244, 246, 251, 0.85);
-    padding-left: 6px;
+}}
+QToolBox::tab:selected {{
+    background-color: rgba(94, 129, 255, 0.25);
+}}
+QToolBox::tab:hover {{
+    background-color: rgba(94, 129, 255, 0.35);
 }}
 
 QPushButton {{
@@ -638,13 +639,10 @@ class MainWindow(QMainWindow):
         )
         self.main_layout.setSpacing(MAIN_LAYOUT_SPACING)
 
-        self.library_card = QFrame()
-        self.library_card.setObjectName("panelCard")
-        library_policy = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.library_card.setSizePolicy(library_policy)
-        self.library_card.setMinimumWidth(LIBRARY_MIN_WIDTH)
-        self.library_card.setMaximumWidth(LIBRARY_MIN_WIDTH + 80)
-        library_layout = QVBoxLayout(self.library_card)
+        library_card = QFrame()
+        library_card.setObjectName("panelCard")
+        library_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        library_layout = QVBoxLayout(library_card)
         library_layout.setContentsMargins(18, 18, 18, 18)
         library_layout.setSpacing(14)
         library_title = QLabel("Library")
@@ -677,27 +675,20 @@ class MainWindow(QMainWindow):
         tip_label.setStyleSheet("color: rgba(244, 246, 251, 0.6);")
         library_layout.addWidget(tip_label)
 
-        self.tiers_card = QFrame()
-        self.tiers_card.setObjectName("panelCard")
-        tiers_policy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.tiers_card.setSizePolicy(tiers_policy)
-        tiers_card_layout = QVBoxLayout(self.tiers_card)
+        tiers_card = QFrame()
+        tiers_card.setObjectName("panelCard")
+        tiers_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        tiers_card_layout = QVBoxLayout(tiers_card)
         tiers_card_layout.setContentsMargins(18, 18, 18, 18)
         tiers_card_layout.setSpacing(12)
         tiers_title = QLabel("Tier Builder")
         tiers_title.setObjectName("sectionTitle")
         tiers_card_layout.addWidget(tiers_title)
         tiers_card_layout.addWidget(self.tiers_scroll, 1)
-        tiers_required_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
-        self.tiers_scroll.setMinimumWidth(tiers_required_width)
-        self.tiers_card.setMinimumWidth(tiers_required_width + 36)
 
         self.settings_box = QFrame()
         self.settings_box.setObjectName("panelCard")
-        settings_policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Expanding)
-        self.settings_box.setSizePolicy(settings_policy)
-        self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
-        self.settings_box.setMaximumWidth(SETTINGS_MIN_WIDTH + 160)
+        self.settings_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         settings_layout = QVBoxLayout(self.settings_box)
         settings_layout.setContentsMargins(18, 18, 18, 18)
         settings_layout.setSpacing(14)
@@ -763,57 +754,53 @@ class MainWindow(QMainWindow):
 
         settings_layout.addWidget(self.nps_status_container)
 
-        setup_section, setup_layout = self._create_settings_section("Setup", layout_cls=QGridLayout)
-        setup_layout.setHorizontalSpacing(12)
-        setup_layout.setVerticalSpacing(10)
-        tiers_label = QLabel("Number of tiers")
-        songs_label = QLabel("Songs per tier")
-        theme_label = QLabel("Theme")
-        setup_layout.addWidget(tiers_label, 0, 0)
-        setup_layout.addWidget(self.spin_tiers, 0, 1)
-        setup_layout.addWidget(songs_label, 0, 2)
-        setup_layout.addWidget(self.spin_songs_per, 0, 3)
-        setup_layout.addWidget(theme_label, 1, 0)
-        setup_layout.addWidget(self.theme_combo, 1, 1, 1, 3)
-        setup_layout.setColumnStretch(0, 0)
-        setup_layout.setColumnStretch(1, 1)
-        setup_layout.setColumnStretch(2, 0)
-        setup_layout.setColumnStretch(3, 1)
-        settings_layout.addWidget(setup_section)
+        self.settings_toolbox = QToolBox()
 
-        filters_section, filters_form = self._create_settings_section("Filters", layout_cls=QFormLayout)
+        filters_page = QWidget()
+        filters_form = QFormLayout(filters_page)
+        filters_form.setContentsMargins(12, 12, 12, 12)
         filters_form.setSpacing(10)
         filters_form.addRow("Minimum difficulty:", self.spin_min_diff)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_group_genre)
         filters_form.addRow(self.chk_artist_career_mode)
-        settings_layout.addWidget(filters_section)
 
-        rules_section, rules_form = self._create_settings_section("Rules", layout_cls=QFormLayout)
+        rules_page = QWidget()
+        rules_form = QFormLayout(rules_page)
+        rules_form.setContentsMargins(12, 12, 12, 12)
         rules_form.setSpacing(10)
         rules_form.addRow(self.chk_longrule)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         rules_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         rules_form.addRow(self.chk_lower_official)
-        rules_form.addRow(self.chk_weight_nps)
-        settings_layout.addWidget(rules_section)
+
+        advanced_page = QWidget()
+        advanced_form = QFormLayout(advanced_page)
+        advanced_form.setContentsMargins(12, 12, 12, 12)
+        advanced_form.setSpacing(10)
+        advanced_form.addRow("Tiers:", self.spin_tiers)
+        advanced_form.addRow("Songs per tier:", self.spin_songs_per)
+        advanced_form.addRow("Theme:", self.theme_combo)
+        advanced_form.addRow(self.chk_weight_nps)
+
+        self.settings_toolbox.addItem(filters_page, "Filters")
+        self.settings_toolbox.addItem(rules_page, "Rules")
+        self.settings_toolbox.addItem(advanced_page, "Advanced")
+        settings_layout.addWidget(self.settings_toolbox)
 
         settings_layout.addStretch(1)
         settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
 
-        for card in (self.library_card, self.tiers_card, self.settings_box):
+        for card in (library_card, tiers_card, self.settings_box):
             effect = QGraphicsDropShadowEffect(card)
             effect.setBlurRadius(30)
             effect.setOffset(0, 12)
             effect.setColor(QColor(0, 0, 0, 120))
             card.setGraphicsEffect(effect)
 
-        self.main_layout.addWidget(self.library_card)
-        self.main_layout.addWidget(self.tiers_card)
-        self.main_layout.addWidget(self.settings_box)
-        self.main_layout.setStretchFactor(self.library_card, 1)
-        self.main_layout.setStretchFactor(self.tiers_card, 5)
-        self.main_layout.setStretchFactor(self.settings_box, 2)
+        self.main_layout.addWidget(library_card, 2)
+        self.main_layout.addWidget(tiers_card, 3)
+        self.main_layout.addWidget(self.settings_box, 2)
 
         self._update_folder_status()
         self._update_size_constraints()
@@ -843,31 +830,6 @@ class MainWindow(QMainWindow):
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
         self._apply_artist_mode_state()
-
-    def _create_settings_section(self, title: str, *, layout_cls=QVBoxLayout):
-        """Build a styled settings section container and return its inner layout."""
-
-        section = QFrame()
-        section.setObjectName("settingsSection")
-        wrapper_layout = QVBoxLayout(section)
-        wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        wrapper_layout.setSpacing(6)
-
-        header = QLabel(title)
-        header.setObjectName("settingsSectionTitle")
-        wrapper_layout.addWidget(header)
-
-        body = QFrame()
-        body.setObjectName("settingsSectionBody")
-        body_layout = layout_cls()
-        if hasattr(body_layout, "setContentsMargins"):
-            body_layout.setContentsMargins(12, 12, 12, 12)
-        if hasattr(body_layout, "setSpacing"):
-            body_layout.setSpacing(10)
-        body.setLayout(body_layout)
-        wrapper_layout.addWidget(body)
-
-        return section, body_layout
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -949,18 +911,11 @@ class MainWindow(QMainWindow):
         """Enforce minimum widget sizes so the layout remains usable."""
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
-        if hasattr(self, 'library_card'):
-            self.library_card.setMinimumWidth(LIBRARY_MIN_WIDTH)
-            self.library_card.setMaximumWidth(LIBRARY_MIN_WIDTH + 80)
         if hasattr(self, 'settings_box'):
             self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
-            self.settings_box.setMaximumWidth(SETTINGS_MIN_WIDTH + 160)
         if hasattr(self, 'tiers_scroll'):
             tiers_min_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
             self.tiers_scroll.setMinimumWidth(tiers_min_width)
-            if hasattr(self, 'tiers_card'):
-                card_padding = 36  # match the 18px left/right interior padding
-                self.tiers_card.setMinimumWidth(tiers_min_width + card_padding)
         if hasattr(self, 'main_layout'):
             self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             target_width = max(self.width(), WINDOW_MIN_WIDTH)
