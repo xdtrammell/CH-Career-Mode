@@ -64,3 +64,26 @@ Make the NPS scan status more prominent and associated with the selected directo
 ## Helpful Hints
 - Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
+# Session 2 — 2025-09-25 10:15
+
+## Topic
+Rebalance main window layout widths and regroup settings controls.
+
+## User Desires
+Ensure the tier builder remains fully visible, keep settings from collapsing, and reorganize settings content into logical sections without losing functionality.
+
+## Specifics of User Desires
+- Tie the tier builder width to `TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH` so tiers aren't truncated at launch and resize smoothly.
+- Enforce sensible minimums for the workflow/settings column, keep the library column near `LIBRARY_MIN_WIDTH`, and adjust stretch factors.
+- Replace the QToolBox accordion with Setup, Filters, and Rules groupings matching the requested control arrangements.
+
+## Actions Taken
+- Introduced `MainWindow._create_settings_section` to build styled sections and rebuilt the settings panel with Setup, Filters, and Rules groups per spec.
+- Applied explicit minimum/maximum widths to the library, tier builder, and settings cards, updated `_update_size_constraints`, and set main layout stretch factors.
+- Seeded tier scroll minimum widths from the column constants so the builder is fully visible initially and during resizing.
+
+## Helpful Hints
+- `_create_settings_section` centralizes styling for future settings groups—pass the desired layout class when adding new sections.
+- `_update_size_constraints` re-applies card minimums after state changes; call it after altering column counts or resizes.
+- Adjust `LIBRARY_MIN_WIDTH`, `SETTINGS_MIN_WIDTH`, or `TIER_COLUMN_MIN_WIDTH` for global layout tweaks without touching widget construction.
+---
