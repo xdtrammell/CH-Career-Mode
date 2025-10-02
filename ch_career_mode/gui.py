@@ -72,6 +72,7 @@ GH_TIER_NAMES = [
 
 TIER_COLUMNS = 3
 TIER_COLUMN_SPACING = 8
+TIER_GRID_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_SPACING = 12
 LIBRARY_MIN_WIDTH = 300
@@ -86,6 +87,7 @@ TIERS_PANEL_MIN_WIDTH = (
     TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
     + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
     + CARD_CONTENT_PADDING
+    + 2 * TIER_GRID_LAYOUT_MARGIN
 )
 WINDOW_MIN_WIDTH = (
     LIBRARY_PANEL_MIN_WIDTH
@@ -626,7 +628,12 @@ class MainWindow(QMainWindow):
         self.tiers_container = QWidget()
         self.tiers_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.tiers_layout = QGridLayout(self.tiers_container)
-        self.tiers_layout.setContentsMargins(8, 8, 8, 8)
+        self.tiers_layout.setContentsMargins(
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+        )
         self.tiers_layout.setHorizontalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setVerticalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setAlignment(Qt.AlignTop)

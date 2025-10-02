@@ -198,3 +198,25 @@ Ensure the tier builder's third column is always visible at startup by padding t
 - The `_decoration_padding()` helper should be reused if future features need to guarantee full column visibility after dynamic layout changes.
 - If tier column counts change, update the underlying constants before relying on the padding helper to avoid stale minimums.
 ---
+# Session 8 — 2025-10-02 09:51
+
+## Topic
+Recalculate tier panel minimum width using explicit layout margins.
+
+## User Desires
+Ensure the tier builder columns are fully visible at launch by correcting the width calculation to include the tiers layout margin.
+
+## Specifics of User Desires
+- Define a shared constant for the tier grid layout margin instead of relying on hardcoded literals.
+- Incorporate the margin into the tier panel minimum width computation so the third column is never clipped.
+- Update the layout configuration to reference the new constant for consistency.
+
+## Actions Taken
+- Added `TIER_GRID_LAYOUT_MARGIN` and reused it when configuring the tier grid layout margins.
+- Expanded `TIERS_PANEL_MIN_WIDTH` to include both sides of the tier grid margin in its formula.
+- Retained existing safeguards and tests to confirm the GUI module still compiles.
+
+## Helpful Hints
+- Any future change to the tier grid spacing should update `TIER_GRID_LAYOUT_MARGIN` to keep derived widths in sync.
+- Verify `_update_size_constraints()` if additional padding constants are introduced so the enforced widths remain accurate.
+---
