@@ -469,6 +469,7 @@ class MainWindow(QMainWindow):
         """Bootstrap widgets, restore persisted settings, and prep defaults."""
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
         self.resize(DEFAULT_WINDOW_SIZE)
         self.setStyleSheet(
             APP_STYLE_TEMPLATE.format(
@@ -630,6 +631,7 @@ class MainWindow(QMainWindow):
 
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
+        self._update_size_constraints()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -909,6 +911,7 @@ class MainWindow(QMainWindow):
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
+        width_before_adjust = self.width()
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
@@ -916,12 +919,18 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'tiers_scroll'):
             tiers_min_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
             self.tiers_scroll.setMinimumWidth(tiers_min_width)
+        if width_before_adjust < WINDOW_MIN_WIDTH:
+            self.resize(WINDOW_MIN_WIDTH, self.height())
         if hasattr(self, 'main_layout'):
             self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             target_width = max(self.width(), WINDOW_MIN_WIDTH)
             target_height = max(self.height(), WINDOW_MIN_HEIGHT)
             if target_width != self.width() or target_height != self.height():
                 self.resize(target_width, target_height)
+        if hasattr(self, 'tiers_scroll'):
+            allow_horizontal_scroll = width_before_adjust < WINDOW_MIN_WIDTH
+            policy = Qt.ScrollBarAsNeeded if allow_horizontal_scroll else Qt.ScrollBarAlwaysOff
+            self.tiers_scroll.setHorizontalScrollBarPolicy(policy)
 
     def _is_procedural_theme(self) -> bool:
         """Return True when the active theme should auto-generate tier names."""

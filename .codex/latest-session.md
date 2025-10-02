@@ -19,6 +19,29 @@ Add a root-level `app_entry.py` that imports `main` from `ch_career_mode.__main_
 
 With this context in mind, I have a follow up query:
 ---
+# Session 4 — 2025-09-25 11:10
+
+## Topic
+Safeguard the tier builder width during startup and resizing.
+
+## User Desires
+Guarantee the window opens wide enough for all tier columns while preserving layout balance and fallback behavior when space is constrained.
+
+## Specifics of User Desires
+- Apply the main window minimum size before the initial resize so launch dimensions accommodate three tier columns.
+- Re-run `_update_size_constraints()` after rebuilding tier widgets and resize the window when runtime changes drop below the minimum width.
+- Provide horizontal scrolling as a fallback whenever the window ends up narrower than required so columns never disappear silently.
+
+## Actions Taken
+- Set the minimum window size prior to the first resize in `MainWindow.__init__` and triggered a constraints refresh immediately after rebuilding tiers.
+- Extended `_update_size_constraints()` to capture the pre-adjust width, enforce the minimum width via `resize`, and reapply the global minimum size guard.
+- Toggled the tier scroll area's horizontal policy based on the pre-adjust width so users can pan to hidden columns if the window shrinks below the minimum.
+
+## Helpful Hints
+- Call `_update_size_constraints()` whenever tier counts or window metrics change to keep scroll behavior and minimums aligned.
+- Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
+- The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
+---
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
