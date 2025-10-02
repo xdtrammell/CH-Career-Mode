@@ -176,3 +176,25 @@ Guarantee all three tier columns render without truncation at startup while pres
 - Adjust `CARD_CONTENT_MARGIN` if card padding changes to keep window and panel width calculations aligned.
 - When modifying tier layout margins or column counts, update `TIERS_PANEL_MIN_WIDTH` so `_update_size_constraints()` stays accurate.
 ---
+# Session 7 — 2025-10-02 10:25
+
+## Topic
+Account for window decorations when sizing the main window.
+
+## User Desires
+Ensure the tier builder's third column is always visible at startup by padding the window width for OS chrome while keeping the existing safeguards.
+
+## Specifics of User Desires
+- Replace the fixed default resize with logic that measures window decorations and adds an appropriate safety buffer.
+- Apply the same padded width inside `_update_size_constraints()` whenever the window is forced back to its minimum size.
+- Retain the horizontal scroll fallback so users can still reach hidden columns after manually shrinking the window.
+
+## Actions Taken
+- Added a `_decoration_padding()` helper and used it during initialization to expand the window width by the larger of the measured chrome or a 40px buffer.
+- Updated `_update_size_constraints()` to reuse the padded width whenever it corrects a too-small window.
+- Kept the existing horizontal scroll toggle so users who resize below the minimum can still access all tier columns.
+
+## Helpful Hints
+- The `_decoration_padding()` helper should be reused if future features need to guarantee full column visibility after dynamic layout changes.
+- If tier column counts change, update the underlying constants before relying on the padding helper to avoid stale minimums.
+---

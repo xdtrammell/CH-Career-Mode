@@ -477,7 +477,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
         self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        self.resize(DEFAULT_WINDOW_SIZE)
+        safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+        self.resize(safe_width, WINDOW_MIN_HEIGHT)
         self.setStyleSheet(
             APP_STYLE_TEMPLATE.format(
                 accent=ACCENT_COLOR,
@@ -640,7 +641,7 @@ class MainWindow(QMainWindow):
         self._rebuild_tier_widgets()
         self._update_size_constraints()
         if self.width() < WINDOW_MIN_WIDTH:
-            self.resize(WINDOW_MIN_WIDTH + 40, self.height())
+            self.resize(WINDOW_MIN_WIDTH + self._decoration_padding(), self.height())
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -929,6 +930,14 @@ class MainWindow(QMainWindow):
         if hasattr(self, "btn_cancel_scan"):
             self.btn_cancel_scan.setEnabled(False)
 
+    def _decoration_padding(self) -> int:
+        """Return the buffer needed so window chrome never hides tier columns."""
+
+        frame_width = self.frameGeometry().width()
+        geo_width = self.geometry().width()
+        decoration_padding = max(0, frame_width - geo_width)
+        return max(40, decoration_padding)
+
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
@@ -947,7 +956,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'tiers_card'):
             self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
         if width_before_adjust < WINDOW_MIN_WIDTH:
-            self.resize(WINDOW_MIN_WIDTH, self.height())
+            safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+            self.resize(safe_width, self.height())
         if hasattr(self, 'main_layout'):
             self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             target_width = max(self.width(), WINDOW_MIN_WIDTH)
