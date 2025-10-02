@@ -220,3 +220,25 @@ Ensure the tier builder columns are fully visible at launch by correcting the wi
 - Any future change to the tier grid spacing should update `TIER_GRID_LAYOUT_MARGIN` to keep derived widths in sync.
 - Verify `_update_size_constraints()` if additional padding constants are introduced so the enforced widths remain accurate.
 ---
+# Session 9 — 2025-10-02 10:20
+
+## Topic
+Ensure tier builder columns remain fully visible via layout constraints.
+
+## User Desires
+Keep all three tier columns visible at startup by fixing the Tier Builder layout in gui.py.
+
+## Specifics of User Desires
+- Investigate the tier grid configuration to identify why the third column is clipped on launch.
+- Adjust layout sizing so each column receives equal space and respects the intended minimum width.
+- Preserve existing functionality while ensuring the Tier Builder stays readable even when the window resizes.
+
+## Actions Taken
+- Applied column stretch and minimum width constraints to the tier grid during initialization and rebuilds.
+- Set each tier card wrapper to enforce the shared minimum width so layout math matches the panel constants.
+- Re-ran the GUI size constraint routine to confirm the new limits coexist with the existing fallback safeguards.
+
+## Helpful Hints
+- If tier counts or minimum widths change, update the shared constants so the grid and window constraints stay aligned.
+- When introducing new tier layouts, reuse the column minimum width call to avoid regressions in the initial viewport.
+---

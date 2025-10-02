@@ -637,6 +637,9 @@ class MainWindow(QMainWindow):
         self.tiers_layout.setHorizontalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setVerticalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setAlignment(Qt.AlignTop)
+        for column in range(TIER_COLUMNS):
+            self.tiers_layout.setColumnStretch(column, 1)
+            self.tiers_layout.setColumnMinimumWidth(column, TIER_COLUMN_MIN_WIDTH)
 
         self.tiers_scroll = QScrollArea()
         self.tiers_scroll.setWidgetResizable(True)
@@ -1164,6 +1167,7 @@ class MainWindow(QMainWindow):
 
         for col in range(cols):
             self.tiers_layout.setColumnStretch(col, 1)
+            self.tiers_layout.setColumnMinimumWidth(col, TIER_COLUMN_MIN_WIDTH)
 
         remainder = tier_count % cols
         if remainder:
@@ -1183,6 +1187,7 @@ class MainWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("tierCard")
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        panel.setMinimumWidth(TIER_COLUMN_MIN_WIDTH)
         panel.setStyleSheet(TIER_CARD_STYLE)
 
         shadow = QGraphicsDropShadowEffect(panel)
