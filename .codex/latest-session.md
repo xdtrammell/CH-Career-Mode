@@ -242,3 +242,25 @@ Keep all three tier columns visible at startup by fixing the Tier Builder layout
 - If tier counts or minimum widths change, update the shared constants so the grid and window constraints stay aligned.
 - When introducing new tier layouts, reuse the column minimum width call to avoid regressions in the initial viewport.
 ---
+# Session 10 — 2025-10-02 10:50
+
+## Topic
+Align tier builder scrollbar behaviour with layout padding.
+
+## User Desires
+Stop the Tier Builder panel from showing a vertical scrollbar by default and style it to match the Fluent theme.
+
+## Specifics of User Desires
+- Default the Tier Builder scroll area's vertical scrollbar to hidden and only reveal it when the content exceeds the viewport height.
+- Apply a slim, translucent Fluent-inspired look when the scrollbar is displayed.
+- Preserve all existing safeguards that keep the three tier columns visible at launch.
+
+## Actions Taken
+- Set the tier scroll area's vertical scrollbar policy to `ScrollBarAlwaysOff` by default and toggle it inside `_sync_all_tier_heights()` based on the current viewport and content heights.
+- Assigned an object name to the tier scroll area and added stylesheet rules that render the vertical scrollbar as a narrow, semi-transparent thumb.
+- Kept the horizontal scrolling fallback and size constraint routines unchanged while extending the tier height synchronisation to manage the scrollbar visibility.
+
+## Helpful Hints
+- If tier card padding or row heights change, revisit `_sync_all_tier_heights()` so the viewport comparison remains accurate.
+- The Fluent scrollbar styling is scoped to `tiersScroll`; reuse this object name for future tier scroll replacements to inherit the same aesthetic.
+---

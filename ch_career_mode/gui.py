@@ -285,6 +285,34 @@ QScrollArea {{
     border: none;
 }}
 
+QScrollArea#tiersScroll QScrollBar:vertical {{
+    background: transparent;
+    width: 8px;
+    margin: 6px 2px 6px 0;
+    border-radius: 4px;
+}}
+QScrollArea#tiersScroll QScrollBar::handle:vertical {{
+    background: rgba(244, 246, 251, 0.35);
+    border-radius: 4px;
+    min-height: 32px;
+}}
+QScrollArea#tiersScroll QScrollBar::handle:vertical:hover {{
+    background: rgba(244, 246, 251, 0.55);
+}}
+QScrollArea#tiersScroll QScrollBar::add-line:vertical,
+QScrollArea#tiersScroll QScrollBar::sub-line:vertical,
+QScrollArea#tiersScroll QScrollBar::up-arrow:vertical,
+QScrollArea#tiersScroll QScrollBar::down-arrow:vertical {{
+    height: 0;
+    width: 0;
+    margin: 0;
+    border: none;
+}}
+QScrollArea#tiersScroll QScrollBar::add-page:vertical,
+QScrollArea#tiersScroll QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
+
 QToolButton#tierToggle {{
     border: none;
     color: #f4f6fb;
@@ -642,9 +670,10 @@ class MainWindow(QMainWindow):
             self.tiers_layout.setColumnMinimumWidth(column, TIER_COLUMN_MIN_WIDTH)
 
         self.tiers_scroll = QScrollArea()
+        self.tiers_scroll.setObjectName("tiersScroll")
         self.tiers_scroll.setWidgetResizable(True)
         self.tiers_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tiers_scroll.setWidget(self.tiers_container)
 
         self._regenerate_tier_names(procedural_refresh=True)
@@ -1301,6 +1330,14 @@ class MainWindow(QMainWindow):
         for tier in self.tiers_widgets:
             self._sync_tier_height(tier)
         self._update_size_constraints()
+        if hasattr(self, "tiers_scroll") and hasattr(self, "tiers_container"):
+            viewport_height = self.tiers_scroll.viewport().height()
+            content_height = self.tiers_container.sizeHint().height()
+            if viewport_height > 0 and content_height > viewport_height:
+                policy = Qt.ScrollBarAsNeeded
+            else:
+                policy = Qt.ScrollBarAlwaysOff
+            self.tiers_scroll.setVerticalScrollBarPolicy(policy)
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
         """Remove a song from a tier and return it to the library pane."""
