@@ -132,3 +132,25 @@ Restore the GUI implementation to the state captured in commit e07301b after bei
 - Future tweaks should branch from commit e07301b to preserve the material-themed baseline the user prefers.
 - Use `git fetch https://github.com/xdtrammell/CH-Career-Mode.git` to pull additional commits if more history is required.
 ---
+# Session 5 — 2025-10-02 09:23
+
+## Topic
+Buffer the launch width so tier columns remain visible by default.
+
+## User Desires
+Keep all three tier columns visible when the window opens while preserving existing minimum-size and scrolling safeguards.
+
+## Specifics of User Desires
+- Increase the default window width beyond `WINDOW_MIN_WIDTH` to provide a small buffer for the tier builder.
+- After applying size constraints during initialization, ensure the window width is still at least the requested minimum.
+- Maintain the horizontal scroll fallback inside `_update_size_constraints()` without altering other behaviors.
+
+## Actions Taken
+- Updated `DEFAULT_WINDOW_SIZE` to add a 40px buffer above `WINDOW_MIN_WIDTH` so the default resize fits all columns comfortably.
+- Added a startup check after `_update_size_constraints()` to expand the window to `WINDOW_MIN_WIDTH + 40` if initialization left it narrower.
+- Left `_update_size_constraints()` logic intact so the horizontal scroll fallback remains available when users shrink the window.
+
+## Helpful Hints
+- Adjust the buffer in `DEFAULT_WINDOW_SIZE` if tier column minimum widths or panel minimums change in the future.
+- Call `_update_size_constraints()` whenever column counts change so the guard check can reapply the buffered width.
+---

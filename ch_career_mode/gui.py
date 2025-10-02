@@ -87,7 +87,7 @@ WINDOW_MIN_WIDTH = (
     + 2 * MAIN_LAYOUT_SPACING
     + 2 * MAIN_LAYOUT_MARGIN
 )
-DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH + 40, WINDOW_MIN_HEIGHT)
 
 
 THEME_SETS = {
@@ -632,6 +632,8 @@ class MainWindow(QMainWindow):
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
         self._update_size_constraints()
+        if self.width() < WINDOW_MIN_WIDTH:
+            self.resize(WINDOW_MIN_WIDTH + 40, self.height())
 
         central = QWidget()
         self.setCentralWidget(central)
