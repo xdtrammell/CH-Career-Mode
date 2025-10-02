@@ -78,12 +78,19 @@ LIBRARY_MIN_WIDTH = 300
 SETTINGS_MIN_WIDTH = 280
 TIER_COLUMN_MIN_WIDTH = 240
 TIER_LIST_EXTRA_PADDING = 8
+CARD_CONTENT_MARGIN = 18
+CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
-WINDOW_MIN_WIDTH = (
-    LIBRARY_MIN_WIDTH
-    + SETTINGS_MIN_WIDTH
-    + TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
+LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
+TIERS_PANEL_MIN_WIDTH = (
+    TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
     + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+    + CARD_CONTENT_PADDING
+)
+WINDOW_MIN_WIDTH = (
+    LIBRARY_PANEL_MIN_WIDTH
+    + SETTINGS_MIN_WIDTH
+    + TIERS_PANEL_MIN_WIDTH
     + 2 * MAIN_LAYOUT_SPACING
     + 2 * MAIN_LAYOUT_MARGIN
 )
@@ -646,8 +653,14 @@ class MainWindow(QMainWindow):
         library_card = QFrame()
         library_card.setObjectName("panelCard")
         library_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.library_card = library_card
         library_layout = QVBoxLayout(library_card)
-        library_layout.setContentsMargins(18, 18, 18, 18)
+        library_layout.setContentsMargins(
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+        )
         library_layout.setSpacing(14)
         library_title = QLabel("Library")
         library_title.setObjectName("sectionTitle")
@@ -682,8 +695,14 @@ class MainWindow(QMainWindow):
         tiers_card = QFrame()
         tiers_card.setObjectName("panelCard")
         tiers_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tiers_card = tiers_card
         tiers_card_layout = QVBoxLayout(tiers_card)
-        tiers_card_layout.setContentsMargins(18, 18, 18, 18)
+        tiers_card_layout.setContentsMargins(
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+        )
         tiers_card_layout.setSpacing(12)
         tiers_title = QLabel("Tier Builder")
         tiers_title.setObjectName("sectionTitle")
@@ -916,11 +935,17 @@ class MainWindow(QMainWindow):
         width_before_adjust = self.width()
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
+        if hasattr(self, 'library_card'):
+            self.library_card.setMinimumWidth(LIBRARY_PANEL_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
             self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
         if hasattr(self, 'tiers_scroll'):
-            tiers_min_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
-            self.tiers_scroll.setMinimumWidth(tiers_min_width)
+            tiers_content_min_width = (
+                TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+            )
+            self.tiers_scroll.setMinimumWidth(tiers_content_min_width)
+        if hasattr(self, 'tiers_card'):
+            self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
         if width_before_adjust < WINDOW_MIN_WIDTH:
             self.resize(WINDOW_MIN_WIDTH, self.height())
         if hasattr(self, 'main_layout'):

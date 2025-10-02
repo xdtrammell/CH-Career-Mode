@@ -154,3 +154,25 @@ Keep all three tier columns visible when the window opens while preserving exist
 - Adjust the buffer in `DEFAULT_WINDOW_SIZE` if tier column minimum widths or panel minimums change in the future.
 - Call `_update_size_constraints()` whenever column counts change so the guard check can reapply the buffered width.
 ---
+# Session 6 — 2025-10-02 09:55
+
+## Topic
+Recalculate minimum widths so the tier builder's third column is visible on launch.
+
+## User Desires
+Guarantee all three tier columns render without truncation at startup while preserving the dark themed layout and existing safeguards.
+
+## Specifics of User Desires
+- Increase the effective minimum width by accounting for card padding so the tier card cannot collapse and hide a column.
+- Keep prior minimum-size enforcement and horizontal scrolling logic intact as a fallback when users shrink the window.
+- Maintain the buffered default window size introduced earlier while ensuring derived constants reflect actual layout needs.
+
+## Actions Taken
+- Introduced shared card padding constants and updated the window minimum width calculation to include library and tier card margins.
+- Applied the padding constants to card layout margins, persisted references to the library and tier panels, and enforced their minimum widths.
+- Reused the derived panel widths inside `_update_size_constraints()` so the tier scroll area and card maintain the space required for all columns.
+
+## Helpful Hints
+- Adjust `CARD_CONTENT_MARGIN` if card padding changes to keep window and panel width calculations aligned.
+- When modifying tier layout margins or column counts, update `TIERS_PANEL_MIN_WIDTH` so `_update_size_constraints()` stays accurate.
+---
