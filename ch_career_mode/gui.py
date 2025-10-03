@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QToolBox,
     QToolButton,
     QScrollBar,
+    QLayout,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -546,6 +547,7 @@ class MainWindow(QMainWindow):
         for accent_btn in (self.btn_scan, self.btn_auto, self.btn_export):
             accent_btn.setProperty("class", "accent")
             accent_btn.setCursor(Qt.PointingHandCursor)
+            accent_btn.setMinimumWidth(accent_btn.sizeHint().width())
         self.btn_clear_cache.setCursor(Qt.PointingHandCursor)
 
         self.search_box = QLineEdit()
@@ -810,6 +812,7 @@ class MainWindow(QMainWindow):
         settings_layout = QVBoxLayout(self.settings_box)
         settings_layout.setContentsMargins(18, 18, 18, 18)
         settings_layout.setSpacing(14)
+        self.settings_layout = settings_layout
 
         workflow_title = QLabel("Workflow")
         workflow_title.setObjectName("sectionTitle")
@@ -838,9 +841,11 @@ class MainWindow(QMainWindow):
         primary_actions = QHBoxLayout()
         primary_actions.setContentsMargins(0, 0, 0, 0)
         primary_actions.setSpacing(10)
-        primary_actions.addWidget(self.btn_scan, 1)
-        primary_actions.addWidget(self.btn_auto, 1)
-        primary_actions.addWidget(self.btn_export, 1)
+        primary_actions.setSizeConstraint(QLayout.SetMinimumSize)
+        primary_actions.addWidget(self.btn_scan)
+        primary_actions.addWidget(self.btn_auto)
+        primary_actions.addWidget(self.btn_export)
+        self.primary_actions_layout = primary_actions
         settings_layout.addLayout(primary_actions)
 
         self.scan_progress_container = QFrame()
@@ -1096,16 +1101,47 @@ class MainWindow(QMainWindow):
         if internal.value() != value:
             internal.setValue(value)
 
+    def _workflow_actions_minimum_width(self) -> int:
+        """Return the minimum width required to keep workflow buttons on one row."""
+
+        buttons = []
+        for attr in ("btn_scan", "btn_auto", "btn_export"):
+            button = getattr(self, attr, None)
+            if button is None:
+                continue
+            width = button.minimumWidth()
+            if width <= 0:
+                width = button.sizeHint().width()
+            buttons.append(width)
+        spacing_total = 0
+        if hasattr(self, "primary_actions_layout") and buttons:
+            spacing = self.primary_actions_layout.spacing()
+            spacing_total = spacing * max(0, len(buttons) - 1)
+        margin_total = 0
+        layout = getattr(self, "settings_layout", None)
+        if layout is not None:
+            margins: QMargins = layout.contentsMargins()
+            margin_total = margins.left() + margins.right()
+        return sum(buttons) + spacing_total + margin_total
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
         width_before_adjust = self.width()
+        actions_min_width = self._workflow_actions_minimum_width()
+        settings_min = max(SETTINGS_MIN_WIDTH, actions_min_width)
+        window_min_width = (
+            LIBRARY_PANEL_MIN_WIDTH
+            + settings_min
+            + TIERS_PANEL_MIN_WIDTH
+            + 2 * MAIN_LAYOUT_SPACING
+            + 2 * MAIN_LAYOUT_MARGIN
+        )
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
         if hasattr(self, 'library_card'):
             self.library_card.setMinimumWidth(LIBRARY_PANEL_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
-            self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
+            self.settings_box.setMinimumWidth(settings_min)
         if hasattr(self, 'tiers_scroll'):
             tiers_content_min_width = (
                 TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
@@ -1118,17 +1154,17 @@ class MainWindow(QMainWindow):
                 self.tiers_wrap.setMinimumWidth(tiers_wrap_min_width)
         if hasattr(self, 'tiers_card'):
             self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
-        if width_before_adjust < WINDOW_MIN_WIDTH:
-            safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+        if width_before_adjust < window_min_width:
+            safe_width = window_min_width + self._decoration_padding()
             self.resize(safe_width, self.height())
         if hasattr(self, 'main_layout'):
-            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-            target_width = max(self.width(), WINDOW_MIN_WIDTH)
+            self.setMinimumSize(window_min_width, WINDOW_MIN_HEIGHT)
+            target_width = max(self.width(), window_min_width)
             target_height = max(self.height(), WINDOW_MIN_HEIGHT)
             if target_width != self.width() or target_height != self.height():
                 self.resize(target_width, target_height)
         if hasattr(self, 'tiers_scroll'):
-            allow_horizontal_scroll = width_before_adjust < WINDOW_MIN_WIDTH
+            allow_horizontal_scroll = width_before_adjust < window_min_width
             policy = Qt.ScrollBarAsNeeded if allow_horizontal_scroll else Qt.ScrollBarAlwaysOff
             self.tiers_scroll.setHorizontalScrollBarPolicy(policy)
         self._sync_external_tier_scrollbar()

@@ -369,3 +369,22 @@ Load the tier count from settings in `MainWindow.__init__`, defaulting to nine t
 ## Helpful Hints
 If the allowed tier range changes, update the clamp in both the constructor and settings handler so persisted values stay valid.
 ---
+# Session 16 — 2025-10-03 10:08
+
+## Topic
+Ensure the Workflow action buttons retain readable labels regardless of the initial window size.
+
+## User Desires
+The user wanted the Workflow buttons to match their stretched appearance on launch and to stop collapsing when the window is narrow.
+
+## Specifics of User Desires
+They requested enforcing minimum widths based on the buttons’ size hints, making the action row communicate its minimum size, and adjusting the window constraints so the Workflow panel cannot shrink enough to clip the text.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to pin the Workflow buttons to their size-hint widths, remove stretch factors, and store layout references for later measurement.
+- Added `gui.py — MainWindow._workflow_actions_minimum_width` to calculate the minimum width required for the Workflow row including spacing and card margins.
+- Reworked `gui.py — MainWindow._update_size_constraints` to apply the dynamic Workflow width when setting the settings panel and overall window minimums.
+
+## Helpful Hints
+If additional controls are added to the Workflow row, update `_workflow_actions_minimum_width` so the spacing and margin calculation still reflects the full set of buttons.
+---
