@@ -325,3 +325,27 @@ Ensure the tier builder's third column stays visible while relocating the vertic
 ---
 
 ---
+
+# Session 14 — 2025-10-02 13:30
+
+## Topic
+Stabilise initial tier list sizing to prevent oversized first paint.
+
+## User Desires
+Ensure the tier builder respects the configured row count at startup and that wrappers do not stretch lists beyond their synced heights.
+
+## Specifics of User Desires
+- Remove the `TierList.sizeHint()` default height so the main window controls overall sizing.
+- Lock in each tier list height before the widgets are inserted into the layout, then keep wrapper bodies fixed to the calculated dimensions.
+- Reapply calculated heights after the window shows and guard against empty tiers ballooning due to fallback metrics.
+
+## Actions Taken
+- Added an early `_sync_tier_height` call during tier construction, updated the synchronisation routine to cap empty tiers, and propagate heights to the enclosing body widgets.
+- Switched the tier body containers to a fixed vertical size policy, collapsed them when toggled shut, and scheduled a zero-delay timer to resync heights once the UI is polished.
+- Removed the `TierList` size hint override and introduced margin-aware body height updates so the grid layout never stretches lists unexpectedly.
+
+## Helpful Hints
+- `_sync_tier_height` now sets both the list and body heights; call it whenever the row count should refresh, even before a tier is added to a layout.
+- The post-initialisation `QTimer.singleShot` ensures Qt font metrics are ready—keep it if additional startup adjustments rely on polished geometry.
+- If tier body padding changes, update `_sync_tier_height` to include the new margins so wrappers remain aligned with the list height.
+---

@@ -36,7 +36,14 @@ Each new session **appends** to the end of `.codex/latest-session.md` using the 
 2. Each session should increment the session number sequentially.
 3. Include a timestamp (`YYYY-MM-DD HH:MM`) in the header.
 4. Separate sessions with a horizontal rule (`---`).
-5. Keep entries concise but detailed enough for future reference.
+5. Each section (`Topic`, `User Desires`, etc.) must contain at least one full sentence.
+6. Avoid vague placeholders like “fixed stuff” — describe clearly enough that a future maintainer could retrace the work.
+7. If a session continues work from a previous session, explicitly reference the prior session number in the `Topic` or `Actions Taken`.
+8. When mentioning code changes, always include the file and function/class name (e.g., `gui.py — MainWindow._sync_tier_height`).    
+9. Before writing a new session, always scan `.codex/latest-session.md` from top to bottom and detect the highest existing session number.  
+10. The new session number must be exactly one greater than the highest found, regardless of ordering in the file.  
+11. Never insert new sessions between existing ones — always append at the very end of the file.
+12. All sessions must form a strictly increasing sequence (Session 1, Session 2, Session 3, …). If a mismatch is detected, assume the largest number is the latest and continue from there.
 
 ## Example
 ```

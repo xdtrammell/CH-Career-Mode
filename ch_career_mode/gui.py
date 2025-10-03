@@ -7,7 +7,7 @@ import time
 from typing import Dict, List, Optional
 from dataclasses import replace
 
-from PySide6.QtCore import Qt, QSize, QSettings, QThread
+from PySide6.QtCore import Qt, QSize, QSettings, QThread, QTimer, QMargins
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -461,10 +461,6 @@ class TierList(QListWidget):
         self.title = title
         if self.title_label is not None:
             self.title_label.setText(title)
-
-    def sizeHint(self) -> QSize:  # type: ignore[override]
-        """Return a sensible default size for the tier column."""
-        return QSize(220, 360)
 
     def _accepts_external_drag(self, event) -> bool:
         """Return True when the drag originates from the library list."""
@@ -947,6 +943,7 @@ class MainWindow(QMainWindow):
         self._connect_tier_scrollbars()
         self._apply_artist_mode_state()
         self._sync_external_tier_scrollbar()
+        QTimer.singleShot(0, self._sync_all_tier_heights)
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -1302,6 +1299,7 @@ class MainWindow(QMainWindow):
             tier = TierList(self._tier_name(idx), drop_handler=self._handle_library_drop)
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
             self._list_delegates.append(self._apply_compact_list_style(tier, variant="tier"))
+            self._sync_tier_height(tier)
 
             wrapper = self._create_tier_panel(tier, idx)
             row = idx // cols
@@ -1383,6 +1381,7 @@ class MainWindow(QMainWindow):
         tier.title_label = title
 
         body = QWidget()
+        body.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         body_layout = QVBoxLayout(body)
         body_layout.setContentsMargins(12, 12, 12, 12)
         body_layout.setSpacing(6)
@@ -1408,17 +1407,26 @@ class MainWindow(QMainWindow):
             self._sync_tier_height(tier)
         else:
             tier.setFixedHeight(0)
+            body.setFixedHeight(0)
         self._sync_all_tier_heights()
 
     def _sync_tier_height(self, tier: TierList) -> None:
         """Resize a tier to show the configured number of rows."""
-        if not tier.isVisible():
+        if not tier.isVisible() and tier.parentWidget() is not None:
             return
-        target_rows = max(self.spin_songs_per.value(), tier.count())
+        configured_rows = self.spin_songs_per.value()
+        target_rows = max(configured_rows, tier.count())
         height = self._tier_height_for(tier, target_rows)
+        if tier.count() == 0:
+            cap_height = self._tier_height_for(tier, configured_rows)
+            height = min(height, cap_height)
         tier.setFixedHeight(height)
         parent = tier.parentWidget()
         if parent:
+            layout = parent.layout()
+            margins = layout.contentsMargins() if layout is not None else QMargins()
+            total_height = height + margins.top() + margins.bottom()
+            parent.setFixedHeight(total_height)
             parent.updateGeometry()
 
     def _tier_height_for(self, tier: QListWidget, rows: int) -> int:
