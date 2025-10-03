@@ -305,7 +305,6 @@ QFrame#scanCard {{
 }}
 QFrame#scanCard[hasFocus="true"] {{
     border-color: rgba(94, 129, 255, 0.55);
-    box-shadow: 0 0 0 1px rgba(94, 129, 255, 0.25);
 }}
 QLabel#scanPhaseLabel {{
     font-weight: 600;
@@ -348,12 +347,22 @@ QLabel#infoBarText {{
 }}
 QToolButton#infoBarAction {{
     border: none;
+    background: transparent;
     color: {accent};
     font-weight: 600;
     padding: 4px 8px;
 }}
 QToolButton#infoBarAction:hover {{
+    background: transparent;
+    color: {accent};
     text-decoration: underline;
+}}
+QToolButton#infoBarAction:pressed {{
+    background: transparent;
+    color: {accent_hover};
+}}
+QToolButton#infoBarAction:focus {{
+    background: transparent;
 }}
 
 QScrollArea {{
@@ -565,6 +574,12 @@ class ScanCard(QFrame):
         super().__init__(parent)
         self.setObjectName("scanCard")
         self.setFocusPolicy(Qt.StrongFocus)
+        self.setProperty("hasFocus", False)
+
+        self._shadow_rest_color = QColor(0, 0, 0, 90)
+        focus_color = QColor(ACCENT_COLOR)
+        focus_color.setAlpha(140)
+        self._shadow_focus_color = focus_color
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 16, 16, 16)
@@ -625,12 +640,18 @@ class ScanCard(QFrame):
         self.setProperty("hasFocus", True)
         self.style().unpolish(self)
         self.style().polish(self)
+        effect = self.graphicsEffect()
+        if isinstance(effect, QGraphicsDropShadowEffect):
+            effect.setColor(self._shadow_focus_color)
         super().focusInEvent(event)
 
     def focusOutEvent(self, event) -> None:  # type: ignore[override]
         self.setProperty("hasFocus", False)
         self.style().unpolish(self)
         self.style().polish(self)
+        effect = self.graphicsEffect()
+        if isinstance(effect, QGraphicsDropShadowEffect):
+            effect.setColor(self._shadow_rest_color)
         super().focusOutEvent(event)
 
     def keyPressEvent(self, event) -> None:  # type: ignore[override]
@@ -1209,6 +1230,7 @@ class MainWindow(QMainWindow):
         settings_layout.addWidget(self._workflow_infobar_host)
 
         self.scan_card = ScanCard()
+        self._apply_shadow(self.scan_card, blur=16, y=1, alpha=90)
         self.scan_card.set_collapsed(True)
         settings_layout.addWidget(self.scan_card)
         self.scan_card.cancel_requested.connect(self._cancel_scan)

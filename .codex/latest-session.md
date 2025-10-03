@@ -491,3 +491,23 @@ Adjust the `_apply_shadow` parameters per widget to fine-tune elevation; keeping
 
 ---
 ---
+# Session 20 — 2025-10-03 20:39
+
+## Topic
+Polish the unified scan card styling per follow-up review feedback from Session 19.
+
+## User Desires
+The user asked for the InfoBar action hover state to remain transparent and for the lingering box-shadow warnings to be eliminated without regressing the scan card focus styling.
+
+## Specifics of User Desires
+They specifically wanted the Rescan action to behave like a text link across hover, pressed, and focus states, and required the unsupported stylesheet property to be removed while preserving a noticeable focus cue through code-driven shadows.
+
+## Actions Taken
+- Updated `gui.py — APP_STYLE_TEMPLATE` to force a transparent background on the InfoBar action button for all interaction states and added pressed and focus rules that lean on the accent palette.
+- Removed the stray `box-shadow` declaration from `gui.py — APP_STYLE_TEMPLATE` and shifted the scan card focus emphasis into code by reusing the drop-shadow effect.
+- Enhanced `gui.py — ScanCard` and its construction in `MainWindow.__init__` so the card stores rest/focus shadow colors, updates them on focus transitions, and receives the shared shadow helper when instantiated.
+
+## Helpful Hints
+Whenever tweaking ScanCard styles, remember that its focus treatment now blends stylesheet border updates with a runtime shadow color shift, so changes should keep both pieces in sync for consistency.
+
+---
