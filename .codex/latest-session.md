@@ -349,3 +349,23 @@ Ensure the tier builder respects the configured row count at startup and that wr
 - The post-initialisation `QTimer.singleShot` ensures Qt font metrics are ready—keep it if additional startup adjustments rely on polished geometry.
 - If tier body padding changes, update `_sync_tier_height` to include the new margins so wrappers remain aligned with the list height.
 ---
+---
+
+# Session 15 — 2025-10-02 14:05
+
+## Topic
+Persist the tier builder count preference with a new nine-tier default.
+
+## User Desires
+Ensure the application opens with nine tiers visible and remembers the player-selected tier count across launches.
+
+## Specifics of User Desires
+Load the tier count from settings in `MainWindow.__init__`, defaulting to nine tiers, clamp it within the spin box limits, and save the normalized value back to the settings store.
+
+## Actions Taken
+- Read the stored tier count via `QSettings` in `gui.py — MainWindow.__init__`, clamped it between one and twenty, and seeded the tier spinner plus settings with the sanitized value.
+- Updated `gui.py — MainWindow._on_tier_count_changed` to persist user changes to the tier count before rebuilding tier widgets.
+
+## Helpful Hints
+If the allowed tier range changes, update the clamp in both the constructor and settings handler so persisted values stay valid.
+---

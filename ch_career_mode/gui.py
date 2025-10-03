@@ -631,7 +631,14 @@ class MainWindow(QMainWindow):
 
         self.spin_tiers = QSpinBox()
         self.spin_tiers.setRange(1, 20)
-        self.spin_tiers.setValue(6)
+        stored_tier_count = self.settings.value("tier_count", 9)
+        try:
+            stored_tier_count = int(stored_tier_count)
+        except (TypeError, ValueError):
+            stored_tier_count = 9
+        clamped_tier_count = max(1, min(20, stored_tier_count))
+        self.spin_tiers.setValue(clamped_tier_count)
+        self.settings.setValue("tier_count", clamped_tier_count)
         self.spin_songs_per = QSpinBox()
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
@@ -1254,6 +1261,7 @@ class MainWindow(QMainWindow):
 
     def _on_tier_count_changed(self, value: int) -> None:
         """Rebuild the tier widgets when the tier count changes."""
+        self.settings.setValue("tier_count", value)
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
 
