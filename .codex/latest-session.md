@@ -21,10 +21,31 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
-
 ---
 
-# Session 2 — 2025-09-25 10:13
+# Session 2 — 2025-10-03 14:10
+
+## Topic
+Second follow-up to guarantee Workflow buttons report final size hints before the window minimum is enforced.
+
+## User Desires
+The user observed that the Workflow actions still appeared truncated on first launch and wanted the app to remeasure button widths after Qt finished applying fonts and DPI scaling.
+
+## Specifics of User Desires
+They requested a helper that refreshes the three action buttons’ minimum widths using up-to-date size hints, to call that helper after building the Workflow panel, again via a zero-delay timer, and once more on the first show before recalculating the global size constraints. They also wanted the width computation to consider live size hints and include a small safety buffer.
+
+## Actions Taken
+- Added `gui.py — MainWindow._refresh_workflow_button_minimums` and `MainWindow._refresh_workflow_buttons_and_update` to recalculate button minimums and immediately reapply size constraints when needed.
+- Updated `gui.py — MainWindow.__init__` to invoke the refresh helper after assembling the Workflow layout, reuse it when enforcing constraints, and schedule another pass with `QTimer.singleShot(0, ...)`.
+- Overrode `gui.py — MainWindow.showEvent` to trigger one final refresh/update pair on the first paint, and expanded `_workflow_actions_minimum_width` to use live size hints with an extra padding buffer.
+
+## Helpful Hints
+If future DPI or theme toggles happen dynamically, call `_refresh_workflow_buttons_and_update` so the Workflow panel can expand before Qt tries to compress the button labels.
+
+---
+---
+
+# Session 3 — 2025-09-25 10:13
 
 ## Topic
 Material-themed redesign of main window with inline scan progress.
@@ -51,8 +72,9 @@ Restyle the PySide6 GUI to feel modern and cohesive, embed scan progress within 
 ---
 
 ---
+---
 
-# Session 3 — 2025-09-25 09:38
+# Session 4 — 2025-09-25 09:38
 
 ## Topic
 Relocate and redesign NPS scan progress bar in settings UI.
@@ -74,8 +96,9 @@ Make the NPS scan status more prominent and associated with the selected directo
 ---
 
 ---
+---
 
-# Session 4 — 2025-09-25 10:15
+# Session 5 — 2025-09-25 10:15
 
 ## Topic
 Rebalance main window layout widths and regroup settings controls.
@@ -100,8 +123,9 @@ Ensure the tier builder remains fully visible, keep settings from collapsing, an
 ---
 
 ---
+---
 
-# Session 5 — 2025-09-25 10:45
+# Session 6 — 2025-09-25 10:45
 
 ## Topic
 Rollback window refactor to material-themed baseline.
@@ -125,8 +149,9 @@ Restore the GUI implementation to the state captured in commit e07301b after bei
 ---
 
 ---
+---
 
-# Session 6 — 2025-10-02 09:23
+# Session 7 — 2025-10-02 09:23
 
 ## Topic
 Buffer the launch width so tier columns remain visible by default.
@@ -150,8 +175,9 @@ Keep all three tier columns visible when the window opens while preserving exist
 ---
 
 ---
+---
 
-# Session 7 — 2025-10-02 09:55
+# Session 8 — 2025-10-02 09:55
 
 ## Topic
 Recalculate minimum widths so the tier builder's third column is visible on launch.
@@ -175,8 +201,9 @@ Guarantee all three tier columns render without truncation at startup while pres
 ---
 
 ---
+---
 
-# Session 8 — 2025-10-02 10:25
+# Session 9 — 2025-10-02 10:25
 
 ## Topic
 Account for window decorations when sizing the main window.
@@ -200,8 +227,9 @@ Ensure the tier builder's third column is always visible at startup by padding t
 ---
 
 ---
+---
 
-# Session 9 — 2025-10-02 09:51
+# Session 10 — 2025-10-02 09:51
 
 ## Topic
 Recalculate tier panel minimum width using explicit layout margins.
@@ -225,8 +253,9 @@ Ensure the tier builder columns are fully visible at launch by correcting the wi
 ---
 
 ---
+---
 
-# Session 10 — 2025-10-02 10:20
+# Session 11 — 2025-10-02 10:20
 
 ## Topic
 Ensure tier builder columns remain fully visible via layout constraints.
@@ -250,8 +279,9 @@ Keep all three tier columns visible at startup by fixing the Tier Builder layout
 ---
 
 ---
+---
 
-# Session 11 — 2025-10-02 10:50
+# Session 12 — 2025-10-02 10:50
 
 ## Topic
 Align tier builder scrollbar behaviour with layout padding.
@@ -275,8 +305,9 @@ Stop the Tier Builder panel from showing a vertical scrollbar by default and sty
 ---
 
 ---
+---
 
-# Session 12 — 2025-10-02 11:15
+# Session 13 — 2025-10-02 11:15
 
 ## Topic
 Reposition tier builder scrollbar gutter spacing.
@@ -300,8 +331,9 @@ Make the tier builder scrollbar feel external to the third column and keep it sl
 ---
 
 ---
+---
 
-# Session 13 — 2025-10-02 12:45
+# Session 14 — 2025-10-02 12:45
 
 ## Topic
 External tier scrollbar gutter integration.
@@ -325,8 +357,9 @@ Ensure the tier builder's third column stays visible while relocating the vertic
 ---
 
 ---
+---
 
-# Session 14 — 2025-10-02 13:30
+# Session 15 — 2025-10-02 13:30
 
 ## Topic
 Stabilise initial tier list sizing to prevent oversized first paint.
@@ -348,4 +381,90 @@ Ensure the tier builder respects the configured row count at startup and that wr
 - `_sync_tier_height` now sets both the list and body heights; call it whenever the row count should refresh, even before a tier is added to a layout.
 - The post-initialisation `QTimer.singleShot` ensures Qt font metrics are ready—keep it if additional startup adjustments rely on polished geometry.
 - If tier body padding changes, update `_sync_tier_height` to include the new margins so wrappers remain aligned with the list height.
+---
+---
+---
+
+# Session 16 — 2025-10-02 14:05
+
+## Topic
+Persist the tier builder count preference with a new nine-tier default.
+
+## User Desires
+Ensure the application opens with nine tiers visible and remembers the player-selected tier count across launches.
+
+## Specifics of User Desires
+Load the tier count from settings in `MainWindow.__init__`, defaulting to nine tiers, clamp it within the spin box limits, and save the normalized value back to the settings store.
+
+## Actions Taken
+- Read the stored tier count via `QSettings` in `gui.py — MainWindow.__init__`, clamped it between one and twenty, and seeded the tier spinner plus settings with the sanitized value.
+- Updated `gui.py — MainWindow._on_tier_count_changed` to persist user changes to the tier count before rebuilding tier widgets.
+
+## Helpful Hints
+If the allowed tier range changes, update the clamp in both the constructor and settings handler so persisted values stay valid.
+---
+---
+
+# Session 17 — 2025-10-03 10:08
+
+## Topic
+Ensure the Workflow action buttons retain readable labels regardless of the initial window size.
+
+## User Desires
+The user wanted the Workflow buttons to match their stretched appearance on launch and to stop collapsing when the window is narrow.
+
+## Specifics of User Desires
+They requested enforcing minimum widths based on the buttons’ size hints, making the action row communicate its minimum size, and adjusting the window constraints so the Workflow panel cannot shrink enough to clip the text.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to pin the Workflow buttons to their size-hint widths, remove stretch factors, and store layout references for later measurement.
+- Added `gui.py — MainWindow._workflow_actions_minimum_width` to calculate the minimum width required for the Workflow row including spacing and card margins.
+- Reworked `gui.py — MainWindow._update_size_constraints` to apply the dynamic Workflow width when setting the settings panel and overall window minimums.
+
+## Helpful Hints
+If additional controls are added to the Workflow row, update `_workflow_actions_minimum_width` so the spacing and margin calculation still reflects the full set of buttons.
+---
+---
+
+# Session 18 — 2025-10-03 12:30
+
+## Topic
+Follow-up layout adjustments to ensure Workflow buttons drive the initial window sizing.
+
+## User Desires
+The user wanted the main window to calculate its minimum width only after the Workflow buttons are realized so their labels never start truncated.
+
+## Specifics of User Desires
+They asked to delay the initial resizing until after the full layout is assembled, have the main layout respect child minimums, include Workflow layout margins in the measurement helper, and trigger one more constraint update once Qt finalizes style metrics.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to defer initial sizing, add a size constraint on the main layout, and schedule another `_update_size_constraints` invocation via `QTimer.singleShot`.
+- Expanded `gui.py — MainWindow._workflow_actions_minimum_width` to add the Workflow row’s own margins into the total width calculation used by `_update_size_constraints`.
+
+## Helpful Hints
+Whenever new controls are added beside the Workflow buttons, recheck `_workflow_actions_minimum_width` so the margin and spacing math still yields the correct minimum width for the settings column.
+
+---
+---
+
+# Session 19 — 2025-10-03 15:45
+
+## Topic
+Replace unsupported stylesheet shadows with QGraphics effects on key panels.
+
+## User Desires
+The user wanted the console spam about unknown `box-shadow` properties eliminated while keeping subtle elevation cues on the primary cards.
+
+## Specifics of User Desires
+They asked to delete every `box-shadow` declaration from the stylesheet, introduce a helper that applies `QGraphicsDropShadowEffect`, and use it only on the library card, workflow card, and each tier panel with tuned blur, offset, and alpha values.
+
+## Actions Taken
+- Removed the `box-shadow` rule from `gui.py — APP_STYLE_TEMPLATE` so Qt stops warning about unsupported stylesheet properties.
+- Added `gui.py — MainWindow._apply_shadow` to centralise drop-shadow configuration and reused it for the library and workflow panels in the constructor.
+- Updated `gui.py — MainWindow._create_tier_panel` to attach the reusable shadow effect to each tier card instead of constructing ad-hoc effects.
+
+## Helpful Hints
+Adjust the `_apply_shadow` parameters per widget to fine-tune elevation; keeping the helper ensures future tweaks avoid duplicating effect setup.
+
+---
 ---

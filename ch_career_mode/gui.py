@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QToolBox,
     QToolButton,
     QScrollBar,
+    QLayout,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -237,7 +238,6 @@ QPushButton[class~="accent"] {{
     border-color: rgba(94, 129, 255, 0.6);
     color: #0a0c12;
     font-weight: 600;
-    box-shadow: 0 12px 24px rgba(94, 129, 255, 0.25);
 }}
 QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
@@ -507,9 +507,6 @@ class MainWindow(QMainWindow):
         """Bootstrap widgets, restore persisted settings, and prep defaults."""
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
-        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
-        self.resize(safe_width, WINDOW_MIN_HEIGHT)
         self.setStyleSheet(
             APP_STYLE_TEMPLATE.format(
                 accent=ACCENT_COLOR,
@@ -546,6 +543,7 @@ class MainWindow(QMainWindow):
         for accent_btn in (self.btn_scan, self.btn_auto, self.btn_export):
             accent_btn.setProperty("class", "accent")
             accent_btn.setCursor(Qt.PointingHandCursor)
+            accent_btn.setMinimumWidth(accent_btn.sizeHint().width())
         self.btn_clear_cache.setCursor(Qt.PointingHandCursor)
 
         self.search_box = QLineEdit()
@@ -631,7 +629,14 @@ class MainWindow(QMainWindow):
 
         self.spin_tiers = QSpinBox()
         self.spin_tiers.setRange(1, 20)
-        self.spin_tiers.setValue(6)
+        stored_tier_count = self.settings.value("tier_count", 9)
+        try:
+            stored_tier_count = int(stored_tier_count)
+        except (TypeError, ValueError):
+            stored_tier_count = 9
+        clamped_tier_count = max(1, min(20, stored_tier_count))
+        self.spin_tiers.setValue(clamped_tier_count)
+        self.settings.setValue("tier_count", clamped_tier_count)
         self.spin_songs_per = QSpinBox()
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
@@ -726,9 +731,6 @@ class MainWindow(QMainWindow):
 
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
-        self._update_size_constraints()
-        if self.width() < WINDOW_MIN_WIDTH:
-            self.resize(WINDOW_MIN_WIDTH + self._decoration_padding(), self.height())
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -737,6 +739,7 @@ class MainWindow(QMainWindow):
             MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN
         )
         self.main_layout.setSpacing(MAIN_LAYOUT_SPACING)
+        self.main_layout.setSizeConstraint(QLayout.SetMinimumSize)
 
         library_card = QFrame()
         library_card.setObjectName("panelCard")
@@ -803,6 +806,7 @@ class MainWindow(QMainWindow):
         settings_layout = QVBoxLayout(self.settings_box)
         settings_layout.setContentsMargins(18, 18, 18, 18)
         settings_layout.setSpacing(14)
+        self.settings_layout = settings_layout
 
         workflow_title = QLabel("Workflow")
         workflow_title.setObjectName("sectionTitle")
@@ -831,10 +835,14 @@ class MainWindow(QMainWindow):
         primary_actions = QHBoxLayout()
         primary_actions.setContentsMargins(0, 0, 0, 0)
         primary_actions.setSpacing(10)
-        primary_actions.addWidget(self.btn_scan, 1)
-        primary_actions.addWidget(self.btn_auto, 1)
-        primary_actions.addWidget(self.btn_export, 1)
+        primary_actions.setSizeConstraint(QLayout.SetMinimumSize)
+        primary_actions.addWidget(self.btn_scan)
+        primary_actions.addWidget(self.btn_auto)
+        primary_actions.addWidget(self.btn_export)
+        self.primary_actions_layout = primary_actions
         settings_layout.addLayout(primary_actions)
+
+        self._refresh_workflow_button_minimums()
 
         self.scan_progress_container = QFrame()
         self.scan_progress_container.setObjectName("scanProgress")
@@ -902,19 +910,15 @@ class MainWindow(QMainWindow):
         settings_layout.addStretch(1)
         settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
 
-        for card in (library_card, tiers_card, self.settings_box):
-            effect = QGraphicsDropShadowEffect(card)
-            effect.setBlurRadius(30)
-            effect.setOffset(0, 12)
-            effect.setColor(QColor(0, 0, 0, 120))
-            card.setGraphicsEffect(effect)
+        self._apply_shadow(library_card, blur=16, y=1, alpha=80)
+        self._apply_shadow(self.settings_box, blur=16, y=1, alpha=80)
 
         self.main_layout.addWidget(library_card, 2)
         self.main_layout.addWidget(tiers_card, 3)
         self.main_layout.addWidget(self.settings_box, 2)
 
+        self._refresh_workflow_buttons_and_update()
         self._update_folder_status()
-        self._update_size_constraints()
 
         self._scan_button_default_tooltip = (
             self.btn_scan.toolTip() or "Scan your library recursively for eligible songs."
@@ -944,6 +948,13 @@ class MainWindow(QMainWindow):
         self._apply_artist_mode_state()
         self._sync_external_tier_scrollbar()
         QTimer.singleShot(0, self._sync_all_tier_heights)
+        QTimer.singleShot(0, self._refresh_workflow_buttons_and_update)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not getattr(self, "_workflow_minimums_refreshed_on_show", False):
+            self._workflow_minimums_refreshed_on_show = True
+            self._refresh_workflow_buttons_and_update()
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -1089,16 +1100,88 @@ class MainWindow(QMainWindow):
         if internal.value() != value:
             internal.setValue(value)
 
+    def _apply_shadow(
+        self,
+        widget: Optional[QWidget],
+        *,
+        blur: int = 20,
+        x: int = 0,
+        y: int = 2,
+        alpha: int = 110,
+    ) -> None:
+        """Attach a drop shadow effect to *widget* with the provided styling."""
+
+        if widget is None:
+            return
+        effect = QGraphicsDropShadowEffect(widget)
+        effect.setBlurRadius(max(0, blur))
+        effect.setOffset(x, y)
+        effect.setColor(QColor(0, 0, 0, max(0, min(255, alpha))))
+        widget.setGraphicsEffect(effect)
+
+    def _refresh_workflow_button_minimums(self) -> None:
+        """Ensure workflow buttons expose up-to-date minimum widths."""
+
+        for attr in ("btn_scan", "btn_auto", "btn_export"):
+            button = getattr(self, attr, None)
+            if button is None:
+                continue
+            hint_width = button.sizeHint().width()
+            if hint_width <= 0:
+                continue
+            if hint_width > button.minimumWidth():
+                button.setMinimumWidth(hint_width)
+
+    def _refresh_workflow_buttons_and_update(self) -> None:
+        """Refresh workflow button minimums and immediately enforce constraints."""
+
+        self._refresh_workflow_button_minimums()
+        self._update_size_constraints()
+
+    def _workflow_actions_minimum_width(self) -> int:
+        """Return the minimum width required to keep workflow buttons on one row."""
+
+        buttons = []
+        for attr in ("btn_scan", "btn_auto", "btn_export"):
+            button = getattr(self, attr, None)
+            if button is None:
+                continue
+            hint_width = button.sizeHint().width()
+            width = max(button.minimumWidth(), hint_width)
+            buttons.append(width)
+        spacing_total = 0
+        actions_margins = 0
+        if hasattr(self, "primary_actions_layout") and buttons:
+            spacing = self.primary_actions_layout.spacing()
+            spacing_total = spacing * max(0, len(buttons) - 1)
+            primary_margins: QMargins = self.primary_actions_layout.contentsMargins()
+            actions_margins = primary_margins.left() + primary_margins.right()
+        settings_margins = 0
+        layout = getattr(self, "settings_layout", None)
+        if layout is not None:
+            margins: QMargins = layout.contentsMargins()
+            settings_margins = margins.left() + margins.right()
+        buffer = 6 if buttons else 0
+        return sum(buttons) + spacing_total + actions_margins + settings_margins + buffer
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
         width_before_adjust = self.width()
+        actions_min_width = self._workflow_actions_minimum_width()
+        settings_min = max(SETTINGS_MIN_WIDTH, actions_min_width)
+        window_min_width = (
+            LIBRARY_PANEL_MIN_WIDTH
+            + settings_min
+            + TIERS_PANEL_MIN_WIDTH
+            + 2 * MAIN_LAYOUT_SPACING
+            + 2 * MAIN_LAYOUT_MARGIN
+        )
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
         if hasattr(self, 'library_card'):
             self.library_card.setMinimumWidth(LIBRARY_PANEL_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
-            self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
+            self.settings_box.setMinimumWidth(settings_min)
         if hasattr(self, 'tiers_scroll'):
             tiers_content_min_width = (
                 TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
@@ -1111,17 +1194,17 @@ class MainWindow(QMainWindow):
                 self.tiers_wrap.setMinimumWidth(tiers_wrap_min_width)
         if hasattr(self, 'tiers_card'):
             self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
-        if width_before_adjust < WINDOW_MIN_WIDTH:
-            safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+        if width_before_adjust < window_min_width:
+            safe_width = window_min_width + self._decoration_padding()
             self.resize(safe_width, self.height())
         if hasattr(self, 'main_layout'):
-            self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-            target_width = max(self.width(), WINDOW_MIN_WIDTH)
+            self.setMinimumSize(window_min_width, WINDOW_MIN_HEIGHT)
+            target_width = max(self.width(), window_min_width)
             target_height = max(self.height(), WINDOW_MIN_HEIGHT)
             if target_width != self.width() or target_height != self.height():
                 self.resize(target_width, target_height)
         if hasattr(self, 'tiers_scroll'):
-            allow_horizontal_scroll = width_before_adjust < WINDOW_MIN_WIDTH
+            allow_horizontal_scroll = width_before_adjust < window_min_width
             policy = Qt.ScrollBarAsNeeded if allow_horizontal_scroll else Qt.ScrollBarAlwaysOff
             self.tiers_scroll.setHorizontalScrollBarPolicy(policy)
         self._sync_external_tier_scrollbar()
@@ -1254,6 +1337,7 @@ class MainWindow(QMainWindow):
 
     def _on_tier_count_changed(self, value: int) -> None:
         """Rebuild the tier widgets when the tier count changes."""
+        self.settings.setValue("tier_count", value)
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
 
@@ -1338,11 +1422,7 @@ class MainWindow(QMainWindow):
         panel.setMinimumWidth(TIER_COLUMN_MIN_WIDTH)
         panel.setStyleSheet(TIER_CARD_STYLE)
 
-        shadow = QGraphicsDropShadowEffect(panel)
-        shadow.setBlurRadius(18)
-        shadow.setOffset(0, 6)
-        shadow.setColor(QColor(0, 0, 0, 110))
-        panel.setGraphicsEffect(shadow)
+        self._apply_shadow(panel, blur=20, y=2, alpha=100)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 12)
