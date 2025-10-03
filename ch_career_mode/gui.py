@@ -23,12 +23,10 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QCheckBox,
     QLineEdit,
-    QGroupBox,
     QFormLayout,
     QMessageBox,
     QScrollArea,
     QComboBox,
-    QProgressDialog,
     QStyledItemDelegate,
     QAbstractItemView,
     QGridLayout,
@@ -37,6 +35,9 @@ from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
     QProgressBar,
+    QToolBox,
+    QToolButton,
+    QScrollBar,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -72,22 +73,35 @@ GH_TIER_NAMES = [
 
 TIER_COLUMNS = 3
 TIER_COLUMN_SPACING = 8
+TIER_GRID_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_SPACING = 12
 LIBRARY_MIN_WIDTH = 300
 SETTINGS_MIN_WIDTH = 280
 TIER_COLUMN_MIN_WIDTH = 240
 TIER_LIST_EXTRA_PADDING = 8
+TIER_SCROLL_GUTTER_WIDTH = 12
+EXTERNAL_VBAR_WIDTH = 12
+CARD_CONTENT_MARGIN = 18
+CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
-WINDOW_MIN_WIDTH = (
-    LIBRARY_MIN_WIDTH
-    + SETTINGS_MIN_WIDTH
-    + TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
+LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
+TIERS_PANEL_MIN_WIDTH = (
+    TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
     + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+    + CARD_CONTENT_PADDING
+    + 2 * TIER_GRID_LAYOUT_MARGIN
+    + TIER_SCROLL_GUTTER_WIDTH
+    + EXTERNAL_VBAR_WIDTH
+)
+WINDOW_MIN_WIDTH = (
+    LIBRARY_PANEL_MIN_WIDTH
+    + SETTINGS_MIN_WIDTH
+    + TIERS_PANEL_MIN_WIDTH
     + 2 * MAIN_LAYOUT_SPACING
     + 2 * MAIN_LAYOUT_MARGIN
 )
-DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH + 40, WINDOW_MIN_HEIGHT)
 
 
 THEME_SETS = {
@@ -163,54 +177,243 @@ def tier_name_for(i: int, theme: str) -> str:
     return f"Tier {i+1}"
 
 
+ACCENT_COLOR = "#5e81ff"
+ACCENT_COLOR_HOVER = "#7b96ff"
+SURFACE_COLOR = "#181b23"
+SURFACE_ELEVATED = "#1f2633"
+
+APP_STYLE_TEMPLATE = """
+QMainWindow {{
+    background-color: #0f1118;
+    color: #f4f6fb;
+    font-family: "Segoe UI", "Roboto", sans-serif;
+    font-size: 11pt;
+}}
+
+QFrame#panelCard {{
+    background-color: {surface};
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}}
+QFrame#scanProgress, QFrame#folderCard {{
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 12px;
+}}
+
+QToolBox::tab {{
+    background-color: #141823;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin: 2px 12px 4px 12px;
+    font-weight: 600;
+}}
+QToolBox::tab:selected {{
+    background-color: rgba(94, 129, 255, 0.25);
+}}
+QToolBox::tab:hover {{
+    background-color: rgba(94, 129, 255, 0.35);
+}}
+
+QPushButton {{
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: #f4f6fb;
+}}
+QPushButton:hover {{
+    background-color: rgba(255, 255, 255, 0.08);
+}}
+QPushButton:disabled {{
+    color: rgba(255, 255, 255, 0.35);
+    background-color: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.04);
+}}
+QPushButton[class~="accent"] {{
+    background-color: {accent};
+    border-color: rgba(94, 129, 255, 0.6);
+    color: #0a0c12;
+    font-weight: 600;
+    box-shadow: 0 12px 24px rgba(94, 129, 255, 0.25);
+}}
+QPushButton[class~="accent"]:hover {{
+    background-color: {accent_hover};
+}}
+
+QLineEdit, QComboBox, QSpinBox {{
+    background-color: rgba(10, 12, 18, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #f4f6fb;
+}}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+    border-color: {accent};
+}}
+QComboBox QAbstractItemView {{
+    background-color: #141823;
+    selection-background-color: {accent};
+}}
+
+QCheckBox {{
+    spacing: 8px;
+}}
+QCheckBox::indicator {{
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background-color: rgba(255, 255, 255, 0.04);
+}}
+QCheckBox::indicator:checked {{
+    background-color: {accent};
+    border-color: {accent};
+}}
+
+QProgressBar {{
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.04);
+    text-align: center;
+    color: #e9ecf6;
+}}
+QProgressBar::chunk {{
+    border-radius: 8px;
+    background-color: {accent};
+}}
+
+QScrollArea {{
+    background: transparent;
+    border: none;
+}}
+
+QScrollArea#tiersScroll QScrollBar:vertical {{
+    background: transparent;
+    width: 8px;
+    margin: 6px 2px 6px 0;
+    border-radius: 4px;
+}}
+QScrollArea#tiersScroll QScrollBar::handle:vertical {{
+    background: rgba(244, 246, 251, 0.35);
+    border-radius: 4px;
+    min-height: 32px;
+}}
+QScrollArea#tiersScroll QScrollBar::handle:vertical:hover {{
+    background: rgba(244, 246, 251, 0.55);
+}}
+QScrollArea#tiersScroll QScrollBar::add-line:vertical,
+QScrollArea#tiersScroll QScrollBar::sub-line:vertical,
+QScrollArea#tiersScroll QScrollBar::up-arrow:vertical,
+QScrollArea#tiersScroll QScrollBar::down-arrow:vertical {{
+    height: 0;
+    width: 0;
+    margin: 0;
+    border: none;
+}}
+QScrollArea#tiersScroll QScrollBar::add-page:vertical,
+QScrollArea#tiersScroll QScrollBar::sub-page:vertical {{
+    background: transparent;
+}}
+
+QToolButton#tierToggle {{
+    border: none;
+    color: #f4f6fb;
+    padding: 4px;
+    border-radius: 8px;
+}}
+QToolButton#tierToggle:hover {{
+    background-color: rgba(0, 0, 0, 0.1);
+}}
+QToolButton#cancelButton {{
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 14px;
+    color: #f4f6fb;
+}}
+QToolButton#cancelButton:hover {{
+    background-color: rgba(255, 255, 255, 0.08);
+}}
+QToolButton#cancelButton:disabled {{
+    color: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.05);
+}}
+
+QLabel#sectionTitle {{
+    font-size: 12pt;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+}}
+"""
+
 LIBRARY_LIST_STYLE = """
-QListWidget {
-    border: 1px solid #2c2c2c;
-    padding: 2px;
-    background-color: #1a1a1a;
-    color: #f0f0f0;
-}
-QListWidget::item {
-    padding: 2px 6px;
-}
-QListWidget::item:selected {
-    background-color: #3c3c3c;
-}
+QListWidget {{
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    background-color: rgba(9, 12, 18, 0.85);
+    color: #f0f3ff;
+    border-radius: 10px;
+}}
+QListWidget::item {{
+    padding: 4px 8px;
+    border-radius: 6px;
+}}
+QListWidget::item:hover {{
+    background-color: rgba(255, 255, 255, 0.05);
+}}
+QListWidget::item:selected {{
+    background-color: rgba(94, 129, 255, 0.55);
+    color: #0a0c12;
+}}
 """
 
 TIER_LIST_STYLE = """
-QListWidget#tierList {
+QListWidget#tierList {{
     border: none;
-    padding: 4px 0;
+    padding: 6px 0;
     background-color: transparent;
-    color: #f5f5f5;
-}
-QListWidget#tierList::item {
-    padding: 4px 10px;
-}
-QListWidget#tierList::item:alternate {
-    background-color: rgba(255, 255, 255, 0.05);
-}
-QListWidget#tierList::item:selected {
-    background-color: rgba(255, 255, 255, 0.14);
-}
+    color: #f5f7ff;
+}}
+QListWidget#tierList::item {{
+    padding: 6px 12px;
+    margin: 1px 4px;
+    border-radius: 6px;
+}}
+QListWidget#tierList::item:alternate {{
+    background-color: rgba(255, 255, 255, 0.04);
+}}
+QListWidget#tierList::item:selected {{
+    background-color: rgba(94, 129, 255, 0.55);
+    color: #0a0c12;
+}}
 """
 
 TIER_CARD_STYLE = """
-QFrame#tierCard {
-    background-color: #1b1d22;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-}
-QWidget#tierHeader {
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
-}
-QLabel#tierTitle {
+QFrame#tierCard {{
+    background-color: {surface_elevated};
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QFrame#tierCard:hover {{
+    border-color: rgba(94, 129, 255, 0.45);
+}}
+QWidget#tierHeader {{
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+}}
+QLabel#tierTitle {{
     font-weight: 600;
-    color: #f8f9fa;
-}
-"""
+    color: #f8f9ff;
+}}
+""".format(
+    accent=ACCENT_COLOR,
+    accent_hover=ACCENT_COLOR_HOVER,
+    surface=SURFACE_COLOR,
+    surface_elevated=SURFACE_ELEVATED,
+)
 
 TIER_HEADER_COLORS = [
     "#ff6b35",
@@ -308,7 +511,16 @@ class MainWindow(QMainWindow):
         """Bootstrap widgets, restore persisted settings, and prep defaults."""
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
-        self.resize(DEFAULT_WINDOW_SIZE)
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+        safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+        self.resize(safe_width, WINDOW_MIN_HEIGHT)
+        self.setStyleSheet(
+            APP_STYLE_TEMPLATE.format(
+                accent=ACCENT_COLOR,
+                accent_hover=ACCENT_COLOR_HOVER,
+                surface=SURFACE_COLOR,
+            )
+        )
 
         self.settings = QSettings("CHCareer", "Builder")
 
@@ -322,26 +534,43 @@ class MainWindow(QMainWindow):
         self._nps_jobs_total = 0
         self.tiers_widgets: List[TierList] = []
         self.tier_wrappers: List[QWidget] = []
+        self._tier_bodies: List[QWidget] = []
+        self._tier_toggles: List[QToolButton] = []
         self._list_delegates: List[CompactItemDelegate] = []
         self.current_tier_names: List[str] = []
         self._procedural_seed = None
         self._scan_active = False
 
-        self.btn_pick = QPushButton("Pick Songs Folder...")
-        self.btn_scan = QPushButton("Scan (recursive)")
+        self.btn_pick = QPushButton("Pick Songs Folder…")
+        self.btn_scan = QPushButton("Scan Library")
         self.btn_auto = QPushButton("Auto-Arrange")
-        self.btn_export = QPushButton("Export Setlist...")
+        self.btn_export = QPushButton("Export Setlist…")
         self.btn_clear_cache = QPushButton("Clear Cache")
         self.btn_clear_cache.setToolTip("Deletes the songs cache so the library will be rebuilt on next scan.")
+        for accent_btn in (self.btn_scan, self.btn_auto, self.btn_export):
+            accent_btn.setProperty("class", "accent")
+            accent_btn.setCursor(Qt.PointingHandCursor)
+        self.btn_clear_cache.setCursor(Qt.PointingHandCursor)
 
         self.search_box = QLineEdit()
-        self.search_box.setPlaceholderText("Search title / artist / charter...")
+        self.search_box.setPlaceholderText("Search title / artist / charter…")
+        self.search_box.setClearButtonEnabled(True)
+        search_icon = self.style().standardIcon(QStyle.SP_FileDialogDetailedView)
+        self.search_box.addAction(search_icon, QLineEdit.LeadingPosition)
+
+        self.sort_mode_combo = QComboBox()
+        self.sort_mode_combo.addItem("Recommended", "recommended")
+        self.sort_mode_combo.addItem("Difficulty (High→Low)", "difficulty_desc")
+        self.sort_mode_combo.addItem("Artist (A→Z)", "artist")
+        self.sort_mode_combo.addItem("Song Title (A→Z)", "title")
+
         self.diff_min = QSpinBox()
         self.diff_min.setRange(0, 9)
         self.diff_min.setValue(0)
         self.diff_max = QSpinBox()
         self.diff_max.setRange(0, 9)
         self.diff_max.setValue(9)
+
         self.chk_longrule = QCheckBox("Keep >7:00 out of first two tiers")
         self.chk_longrule.setChecked(True)
         exclude_memes_setting = bool(self.settings.value("exclude_memes", False, type=bool))
@@ -352,10 +581,11 @@ class MainWindow(QMainWindow):
         self.chk_lower_official.setChecked(lower_official_setting)
         self.chk_lower_official.setToolTip("Treats Harmonix/Neversoft charts as 1 step easier when scoring difficulty.")
         weight_by_nps_setting = bool(self.settings.value("weight_by_nps", False, type=bool))
-        self.chk_weight_nps = QCheckBox("Weight Difficulty by NPS")
+        self.chk_weight_nps = QCheckBox("Weight difficulty by NPS")
         self.chk_weight_nps.setChecked(weight_by_nps_setting)
         self._default_weight_nps_tooltip = "Adds Avg/Peak NPS to the difficulty score when enabled."
         self.chk_weight_nps.setToolTip(self._default_weight_nps_tooltip)
+
         self.nps_progress_bar = QProgressBar()
         self.nps_progress_bar.setRange(0, 1)
         self.nps_progress_bar.setValue(0)
@@ -365,13 +595,15 @@ class MainWindow(QMainWindow):
         self.nps_complete_label = QLabel("NPS scan complete")
         self.nps_complete_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.nps_complete_label.setVisible(False)
-        self.nps_status_container = QWidget()
+        self.nps_status_container = QFrame()
+        self.nps_status_container.setObjectName("scanProgress")
         nps_status_layout = QVBoxLayout(self.nps_status_container)
         nps_status_layout.setContentsMargins(0, 0, 0, 0)
-        nps_status_layout.setSpacing(0)
+        nps_status_layout.setSpacing(4)
         nps_status_layout.addWidget(self.nps_progress_bar)
         nps_status_layout.addWidget(self.nps_complete_label)
         self.nps_status_container.setVisible(False)
+
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
@@ -380,7 +612,6 @@ class MainWindow(QMainWindow):
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
         self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
-
 
         self.folder_status_indicator = QLabel()
         self.folder_status_indicator.setFixedSize(12, 12)
@@ -430,76 +661,263 @@ class MainWindow(QMainWindow):
         self.tiers_container = QWidget()
         self.tiers_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.tiers_layout = QGridLayout(self.tiers_container)
-        self.tiers_layout.setContentsMargins(0, 0, 0, 0)
+        self.tiers_layout.setContentsMargins(
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+            TIER_GRID_LAYOUT_MARGIN,
+        )
         self.tiers_layout.setHorizontalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setVerticalSpacing(TIER_COLUMN_SPACING)
         self.tiers_layout.setAlignment(Qt.AlignTop)
+        for column in range(TIER_COLUMNS):
+            self.tiers_layout.setColumnStretch(column, 1)
+            self.tiers_layout.setColumnMinimumWidth(column, TIER_COLUMN_MIN_WIDTH)
 
         self.tiers_scroll = QScrollArea()
+        self.tiers_scroll.setObjectName("tiersScroll")
         self.tiers_scroll.setWidgetResizable(True)
         self.tiers_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tiers_scroll.setWidget(self.tiers_container)
+
+        self.tiers_vbar = QScrollBar(Qt.Vertical)
+        self.tiers_vbar.setObjectName("tiersExternalScrollBar")
+        self.tiers_vbar.setFixedWidth(EXTERNAL_VBAR_WIDTH)
+        self.tiers_vbar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.tiers_vbar.setFocusPolicy(Qt.NoFocus)
+        self.tiers_vbar.hide()
+        self.tiers_vbar.setStyleSheet(
+            (
+                f"QScrollBar:vertical {{\n"
+                f"    background: transparent;\n"
+                f"    width: {EXTERNAL_VBAR_WIDTH}px;\n"
+                f"    margin: 0;\n"
+                f"    border: none;\n"
+                f"}}\n"
+                f"QScrollBar::handle:vertical {{\n"
+                f"    background-color: rgba(255, 255, 255, 0.28);\n"
+                f"    border-radius: {EXTERNAL_VBAR_WIDTH // 2}px;\n"
+                f"    min-height: 36px;\n"
+                f"}}\n"
+                f"QScrollBar::handle:vertical:hover {{\n"
+                f"    background-color: {ACCENT_COLOR};\n"
+                f"}}\n"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {\n"
+                "    background: transparent;\n"
+                "    height: 0px;\n"
+                "}\n"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {\n"
+                "    background: transparent;\n"
+                "}\n"
+            )
+        )
+
+        tiers_scroll_gutter = QWidget()
+        tiers_scroll_gutter.setFixedWidth(TIER_SCROLL_GUTTER_WIDTH)
+        tiers_scroll_gutter.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+
+        tiers_wrap_layout = QHBoxLayout()
+        tiers_wrap_layout.setContentsMargins(0, 0, 0, 0)
+        tiers_wrap_layout.setSpacing(0)
+        tiers_wrap_layout.addWidget(self.tiers_scroll, 1)
+        tiers_wrap_layout.addWidget(tiers_scroll_gutter)
+        tiers_wrap_layout.addWidget(self.tiers_vbar)
+
+        self.tiers_wrap = QWidget()
+        self.tiers_wrap.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tiers_wrap.setLayout(tiers_wrap_layout)
 
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
-
-        self.settings_box = QGroupBox("Settings")
-        form = QFormLayout(self.settings_box)
-        form.setSpacing(6)
-        form.setContentsMargins(8, 8, 8, 8)
-        form.addRow(self.btn_pick, self.btn_scan)
-        form.addRow(self.btn_clear_cache)
-        status_row = QHBoxLayout()
-        status_row.setContentsMargins(0, 0, 0, 0)
-        status_row.setSpacing(6)
-        status_widget = QWidget()
-        status_widget.setLayout(status_row)
-        status_row.addWidget(self.folder_status_indicator)
-        status_row.addWidget(self.folder_status_label, 1)
-        form.addRow(status_widget)
-        form.addRow(self.nps_status_container)
-        self._update_folder_status()
-        form.addRow(QLabel("Tiers:"), self.spin_tiers)
-        form.addRow(QLabel("Songs per tier:"), self.spin_songs_per)
-        form.addRow(self.chk_longrule)
-        form.addRow(self.chk_group_genre)
-
-        form.addRow(self.chk_artist_career_mode)
-
-        form.addRow(self.chk_exclude_meme)
-        form.addRow(self.chk_lower_official)
-        form.addRow(self.chk_weight_nps)
-        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
-        form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        form.addRow(QLabel("Minimum Difficulty:"), self.spin_min_diff)
-        form.addRow(QLabel("Theme:"), self.theme_combo)
-        form.addRow(self.btn_auto, self.btn_export)
+        self._update_size_constraints()
+        if self.width() < WINDOW_MIN_WIDTH:
+            self.resize(WINDOW_MIN_WIDTH + self._decoration_padding(), self.height())
 
         central = QWidget()
         self.setCentralWidget(central)
-        h = QHBoxLayout(central)
-        h.setContentsMargins(MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN)
-        h.setSpacing(MAIN_LAYOUT_SPACING)
-        self.main_layout = h
+        self.main_layout = QHBoxLayout(central)
+        self.main_layout.setContentsMargins(
+            MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN
+        )
+        self.main_layout.setSpacing(MAIN_LAYOUT_SPACING)
 
-        left_box = QVBoxLayout()
-        left_box.setContentsMargins(0, 0, 0, 0)
-        left_box.setSpacing(4)
-        library_label = QLabel("Library")
-        left_box.addWidget(library_label)
-        self.search_box.setClearButtonEnabled(True)
-        left_box.addWidget(self.search_box)
-        left_box.addWidget(self.lib_list, 1)
+        library_card = QFrame()
+        library_card.setObjectName("panelCard")
+        library_card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.library_card = library_card
+        library_layout = QVBoxLayout(library_card)
+        library_layout.setContentsMargins(
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+        )
+        library_layout.setSpacing(14)
+        library_title = QLabel("Library")
+        library_title.setObjectName("sectionTitle")
+        library_layout.addWidget(library_title)
+
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 0, 0)
+        search_row.setSpacing(8)
+        search_row.addWidget(self.search_box, 1)
+        search_toolbar = QWidget()
+        search_toolbar.setObjectName("libraryToolbar")
+        search_toolbar.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        toolbar_layout = QHBoxLayout(search_toolbar)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(8)
+        sort_label = QLabel("Sort by:")
+        toolbar_layout.addWidget(sort_label)
+        toolbar_layout.addWidget(self.sort_mode_combo, 1)
+        toolbar_layout.addStretch(1)
+        search_row.addWidget(search_toolbar, 1)
+        library_layout.addLayout(search_row)
+
+        library_layout.addWidget(self.lib_list, 1)
+        self.library_count_label = QLabel("No songs loaded")
+        self.library_count_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        library_layout.addWidget(self.library_count_label)
         tip_label = QLabel("Tip: drag songs into tiers; double-click to remove from a tier")
         tip_label.setWordWrap(True)
-        tip_label.setContentsMargins(0, 4, 0, 0)
-        left_box.addWidget(tip_label)
+        tip_label.setStyleSheet("color: rgba(244, 246, 251, 0.6);")
+        library_layout.addWidget(tip_label)
 
-        h.addLayout(left_box, 2)
-        h.addWidget(self.tiers_scroll, 3)
-        h.addWidget(self.settings_box, 1)
+        tiers_card = QFrame()
+        tiers_card.setObjectName("panelCard")
+        tiers_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tiers_card = tiers_card
+        tiers_card_layout = QVBoxLayout(tiers_card)
+        tiers_card_layout.setContentsMargins(
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+            CARD_CONTENT_MARGIN,
+        )
+        tiers_card_layout.setSpacing(12)
+        tiers_title = QLabel("Tier Builder")
+        tiers_title.setObjectName("sectionTitle")
+        tiers_card_layout.addWidget(tiers_title)
+        tiers_card_layout.addWidget(self.tiers_wrap, 1)
 
+        self.settings_box = QFrame()
+        self.settings_box.setObjectName("panelCard")
+        self.settings_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        settings_layout = QVBoxLayout(self.settings_box)
+        settings_layout.setContentsMargins(18, 18, 18, 18)
+        settings_layout.setSpacing(14)
+
+        workflow_title = QLabel("Workflow")
+        workflow_title.setObjectName("sectionTitle")
+        settings_layout.addWidget(workflow_title)
+
+        folder_card = QFrame()
+        folder_card.setObjectName("folderCard")
+        folder_layout = QVBoxLayout(folder_card)
+        folder_layout.setContentsMargins(0, 0, 0, 0)
+        folder_layout.setSpacing(8)
+        folder_header = QHBoxLayout()
+        folder_header.setContentsMargins(0, 0, 0, 0)
+        folder_header.setSpacing(8)
+        folder_header.addWidget(self.btn_pick)
+        folder_header.addStretch(1)
+        folder_layout.addLayout(folder_header)
+
+        status_row = QHBoxLayout()
+        status_row.setContentsMargins(0, 0, 0, 0)
+        status_row.setSpacing(6)
+        status_row.addWidget(self.folder_status_indicator)
+        status_row.addWidget(self.folder_status_label, 1)
+        folder_layout.addLayout(status_row)
+        settings_layout.addWidget(folder_card)
+
+        primary_actions = QHBoxLayout()
+        primary_actions.setContentsMargins(0, 0, 0, 0)
+        primary_actions.setSpacing(10)
+        primary_actions.addWidget(self.btn_scan, 1)
+        primary_actions.addWidget(self.btn_auto, 1)
+        primary_actions.addWidget(self.btn_export, 1)
+        settings_layout.addLayout(primary_actions)
+
+        self.scan_progress_container = QFrame()
+        self.scan_progress_container.setObjectName("scanProgress")
+        scan_layout = QVBoxLayout(self.scan_progress_container)
+        scan_layout.setContentsMargins(0, 0, 0, 0)
+        scan_layout.setSpacing(6)
+        status_header = QHBoxLayout()
+        status_header.setContentsMargins(0, 0, 0, 0)
+        status_header.setSpacing(8)
+        self.scan_status_label = QLabel("Ready to scan")
+        status_header.addWidget(self.scan_status_label, 1)
+        self.btn_cancel_scan = QToolButton()
+        self.btn_cancel_scan.setText("Cancel")
+        self.btn_cancel_scan.setObjectName("cancelButton")
+        self.btn_cancel_scan.setEnabled(False)
+        self.btn_cancel_scan.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_cancel_scan.setCursor(Qt.PointingHandCursor)
+        status_header.addWidget(self.btn_cancel_scan)
+        scan_layout.addLayout(status_header)
+        self.scan_progress_bar = QProgressBar()
+        self.scan_progress_bar.setRange(0, 100)
+        self.scan_progress_bar.setValue(0)
+        self.scan_progress_bar.setFormat("Ready to scan")
+        self.scan_progress_bar.setTextVisible(True)
+        scan_layout.addWidget(self.scan_progress_bar)
+        self.scan_progress_container.setVisible(False)
+        settings_layout.addWidget(self.scan_progress_container)
+
+        settings_layout.addWidget(self.nps_status_container)
+
+        self.settings_toolbox = QToolBox()
+
+        filters_page = QWidget()
+        filters_form = QFormLayout(filters_page)
+        filters_form.setContentsMargins(12, 12, 12, 12)
+        filters_form.setSpacing(10)
+        filters_form.addRow("Minimum difficulty:", self.spin_min_diff)
+        filters_form.addRow(self.chk_exclude_meme)
+        filters_form.addRow(self.chk_group_genre)
+        filters_form.addRow(self.chk_artist_career_mode)
+
+        rules_page = QWidget()
+        rules_form = QFormLayout(rules_page)
+        rules_form.setContentsMargins(12, 12, 12, 12)
+        rules_form.setSpacing(10)
+        rules_form.addRow(self.chk_longrule)
+        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
+        rules_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
+        rules_form.addRow(self.chk_lower_official)
+
+        advanced_page = QWidget()
+        advanced_form = QFormLayout(advanced_page)
+        advanced_form.setContentsMargins(12, 12, 12, 12)
+        advanced_form.setSpacing(10)
+        advanced_form.addRow("Tiers:", self.spin_tiers)
+        advanced_form.addRow("Songs per tier:", self.spin_songs_per)
+        advanced_form.addRow("Theme:", self.theme_combo)
+        advanced_form.addRow(self.chk_weight_nps)
+
+        self.settings_toolbox.addItem(filters_page, "Filters")
+        self.settings_toolbox.addItem(rules_page, "Rules")
+        self.settings_toolbox.addItem(advanced_page, "Advanced")
+        settings_layout.addWidget(self.settings_toolbox)
+
+        settings_layout.addStretch(1)
+        settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
+
+        for card in (library_card, tiers_card, self.settings_box):
+            effect = QGraphicsDropShadowEffect(card)
+            effect.setBlurRadius(30)
+            effect.setOffset(0, 12)
+            effect.setColor(QColor(0, 0, 0, 120))
+            card.setGraphicsEffect(effect)
+
+        self.main_layout.addWidget(library_card, 2)
+        self.main_layout.addWidget(tiers_card, 3)
+        self.main_layout.addWidget(self.settings_box, 2)
+
+        self._update_folder_status()
         self._update_size_constraints()
 
         self._scan_button_default_tooltip = (
@@ -513,8 +931,10 @@ class MainWindow(QMainWindow):
         self.btn_auto.clicked.connect(self.auto_arrange)
         self.btn_export.clicked.connect(self.export_now)
         self.btn_clear_cache.clicked.connect(self.clear_cache)
+        self.btn_cancel_scan.clicked.connect(self._cancel_scan)
         self.spin_tiers.valueChanged.connect(self._on_tier_count_changed)
         self.search_box.textChanged.connect(self._refresh_library_view)
+        self.sort_mode_combo.currentIndexChanged.connect(self._refresh_library_view)
         self.theme_combo.currentTextChanged.connect(self._on_theme_changed)
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
@@ -524,7 +944,9 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
+        self._connect_tier_scrollbars()
         self._apply_artist_mode_state()
+        self._sync_external_tier_scrollbar()
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -557,22 +979,155 @@ class MainWindow(QMainWindow):
         self.chk_weight_nps.setEnabled(enabled)
         self.chk_weight_nps.setToolTip(tooltip)
 
+    def _update_scan_progress_value(self, value: int) -> None:
+        """Reflect scan progress in the embedded progress bar."""
+
+        if not hasattr(self, "scan_progress_bar"):
+            return
+        safe_value = max(0, min(100, int(value)))
+        self.scan_progress_container.setVisible(True)
+        self.scan_progress_bar.setValue(safe_value)
+        self.scan_progress_bar.setFormat(f"Scanning… {safe_value}%")
+
+    def _update_scan_status(self, text: str) -> None:
+        """Update the inline scan status label."""
+
+        if not hasattr(self, "scan_status_label"):
+            return
+        message = text or "Scanning…"
+        self.scan_progress_container.setVisible(True)
+        self.scan_status_label.setText(message)
+
+    def _reset_scan_progress_ui(self, *, message: str = "Ready to scan") -> None:
+        """Hide and reset the scan progress widgets."""
+
+        if not hasattr(self, "scan_progress_container"):
+            return
+        self.scan_status_label.setText(message)
+        self.scan_progress_bar.setValue(0)
+        self.scan_progress_bar.setFormat(message)
+        self.scan_progress_container.setVisible(False)
+        if hasattr(self, "btn_cancel_scan"):
+            self.btn_cancel_scan.setEnabled(False)
+
+    def _cancel_scan(self) -> None:
+        """Allow the user to cancel an in-progress scan."""
+
+        if not getattr(self, "_scan_active", False):
+            self._reset_scan_progress_ui(message="Ready to scan")
+            return
+        worker = getattr(self, "worker", None)
+        if worker is not None:
+            worker.stop()
+        self.scan_status_label.setText("Cancelling scan…")
+        if hasattr(self, "btn_cancel_scan"):
+            self.btn_cancel_scan.setEnabled(False)
+
+    def _decoration_padding(self) -> int:
+        """Return the buffer needed so window chrome never hides tier columns."""
+
+        frame_width = self.frameGeometry().width()
+        geo_width = self.geometry().width()
+        decoration_padding = max(0, frame_width - geo_width)
+        return max(40, decoration_padding)
+
+    def _connect_tier_scrollbars(self) -> None:
+        """Bridge the hidden tier scroll area with the external gutter scrollbar."""
+
+        if not hasattr(self, "tiers_scroll") or not hasattr(self, "tiers_vbar"):
+            return
+        if getattr(self, "_tier_scrollbars_connected", False):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        external = self.tiers_vbar
+        if internal is None or external is None:
+            return
+
+        external.valueChanged.connect(self._on_external_tier_scroll)
+        internal.valueChanged.connect(self._on_internal_tier_scroll)
+        internal.rangeChanged.connect(lambda *_: self._sync_external_tier_scrollbar())
+        internal.actionTriggered.connect(lambda *_: self._sync_external_tier_scrollbar())
+        self._tier_scrollbars_connected = True
+        self._sync_external_tier_scrollbar()
+
+    def _sync_external_tier_scrollbar(self) -> None:
+        """Mirror the internal vertical scrollbar onto the external gutter bar."""
+
+        if not hasattr(self, "tiers_scroll") or not hasattr(self, "tiers_vbar"):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        external = self.tiers_vbar
+        if internal is None or external is None:
+            return
+
+        needs_scroll = internal.maximum() > internal.minimum()
+        external.blockSignals(True)
+        external.setRange(internal.minimum(), internal.maximum())
+        external.setPageStep(max(1, internal.pageStep()))
+        external.setSingleStep(max(1, internal.singleStep()))
+        external.setValue(internal.value())
+        external.setVisible(needs_scroll)
+        external.setEnabled(needs_scroll)
+        external.blockSignals(False)
+        if not needs_scroll:
+            internal.setValue(0)
+
+    def _on_internal_tier_scroll(self, value: int) -> None:
+        """Update the external scrollbar when the internal one moves."""
+
+        if not hasattr(self, "tiers_vbar"):
+            return
+        external = self.tiers_vbar
+        if external.value() != value:
+            external.setValue(value)
+
+    def _on_external_tier_scroll(self, value: int) -> None:
+        """Update the hidden scroll area when the external bar moves."""
+
+        if not hasattr(self, "tiers_scroll"):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        if internal is None:
+            return
+        if internal.value() != value:
+            internal.setValue(value)
+
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
+        width_before_adjust = self.width()
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
+        if hasattr(self, 'library_card'):
+            self.library_card.setMinimumWidth(LIBRARY_PANEL_MIN_WIDTH)
         if hasattr(self, 'settings_box'):
             self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
         if hasattr(self, 'tiers_scroll'):
-            tiers_min_width = TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
-            self.tiers_scroll.setMinimumWidth(tiers_min_width)
+            tiers_content_min_width = (
+                TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
+            )
+            self.tiers_scroll.setMinimumWidth(tiers_content_min_width)
+            if hasattr(self, 'tiers_wrap'):
+                tiers_wrap_min_width = (
+                    tiers_content_min_width + TIER_SCROLL_GUTTER_WIDTH + EXTERNAL_VBAR_WIDTH
+                )
+                self.tiers_wrap.setMinimumWidth(tiers_wrap_min_width)
+        if hasattr(self, 'tiers_card'):
+            self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
+        if width_before_adjust < WINDOW_MIN_WIDTH:
+            safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
+            self.resize(safe_width, self.height())
         if hasattr(self, 'main_layout'):
             self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
             target_width = max(self.width(), WINDOW_MIN_WIDTH)
             target_height = max(self.height(), WINDOW_MIN_HEIGHT)
             if target_width != self.width() or target_height != self.height():
                 self.resize(target_width, target_height)
+        if hasattr(self, 'tiers_scroll'):
+            allow_horizontal_scroll = width_before_adjust < WINDOW_MIN_WIDTH
+            policy = Qt.ScrollBarAsNeeded if allow_horizontal_scroll else Qt.ScrollBarAlwaysOff
+            self.tiers_scroll.setHorizontalScrollBarPolicy(policy)
+        self._sync_external_tier_scrollbar()
 
     def _is_procedural_theme(self) -> bool:
         """Return True when the active theme should auto-generate tier names."""
@@ -732,6 +1287,8 @@ class MainWindow(QMainWindow):
         self._regenerate_tier_names()
         self.tiers_widgets.clear()
         self.tier_wrappers.clear()
+        self._tier_bodies.clear()
+        self._tier_toggles.clear()
 
         while self.tiers_layout.count():
             item = self.tiers_layout.takeAt(0)
@@ -760,6 +1317,7 @@ class MainWindow(QMainWindow):
 
         for col in range(cols):
             self.tiers_layout.setColumnStretch(col, 1)
+            self.tiers_layout.setColumnMinimumWidth(col, TIER_COLUMN_MIN_WIDTH)
 
         remainder = tier_count % cols
         if remainder:
@@ -779,6 +1337,7 @@ class MainWindow(QMainWindow):
         panel = QFrame()
         panel.setObjectName("tierCard")
         panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        panel.setMinimumWidth(TIER_COLUMN_MIN_WIDTH)
         panel.setStyleSheet(TIER_CARD_STYLE)
 
         shadow = QGraphicsDropShadowEffect(panel)
@@ -788,33 +1347,73 @@ class MainWindow(QMainWindow):
         panel.setGraphicsEffect(shadow)
 
         layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 0, 10)
+        layout.setContentsMargins(0, 0, 0, 12)
         layout.setSpacing(0)
 
         header = QWidget()
         header.setObjectName("tierHeader")
         header_color = TIER_HEADER_COLORS[index % len(TIER_HEADER_COLORS)]
         header.setStyleSheet(
-            f"background-color: {header_color}; border-top-left-radius: 12px; border-top-right-radius: 12px;"
+            f"background-color: {header_color}; border-top-left-radius: 14px; border-top-right-radius: 14px;"
         )
         header_layout = QHBoxLayout(header)
-        header_layout.setContentsMargins(12, 10, 12, 10)
-        header_layout.setSpacing(0)
+        header_layout.setContentsMargins(14, 12, 14, 12)
+        header_layout.setSpacing(10)
+
+        icon_label = QLabel()
+        icon = self.style().standardIcon(QStyle.SP_MediaPlay)
+        icon_label.setPixmap(icon.pixmap(20, 20))
+        header_layout.addWidget(icon_label)
 
         title = QLabel(tier.title)
         title.setObjectName("tierTitle")
-        title.setAlignment(Qt.AlignHCenter)
-        header_layout.addWidget(title)
+        title.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        header_layout.addWidget(title, 1)
+
+        toggle = QToolButton()
+        toggle.setObjectName("tierToggle")
+        toggle.setCheckable(True)
+        toggle.setChecked(True)
+        toggle.setArrowType(Qt.DownArrow)
+        toggle.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        toggle.setCursor(Qt.PointingHandCursor)
+        header_layout.addWidget(toggle)
+
         layout.addWidget(header)
         tier.title_label = title
 
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(12, 12, 12, 12)
+        body_layout.setSpacing(6)
+
         tier.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tier.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        layout.addWidget(tier)
+        tier.setViewportMargins(0, 0, 6, 0)
+        body_layout.addWidget(tier)
+        layout.addWidget(body)
+
+        toggle.toggled.connect(lambda checked, t=tier, b=body, btn=toggle: self._on_tier_toggle(t, b, btn, checked))
+        self._tier_bodies.append(body)
+        self._tier_toggles.append(toggle)
         return panel
+
+    def _on_tier_toggle(self, tier: TierList, body: QWidget, toggle: QToolButton, checked: bool) -> None:
+        """Handle expanding/collapsing of tier panels while keeping layout tidy."""
+
+        toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
+        body.setVisible(checked)
+        tier.setVisible(checked)
+        if checked:
+            self._sync_tier_height(tier)
+        else:
+            tier.setFixedHeight(0)
+        self._sync_all_tier_heights()
 
     def _sync_tier_height(self, tier: TierList) -> None:
         """Resize a tier to show the configured number of rows."""
+        if not tier.isVisible():
+            return
         target_rows = max(self.spin_songs_per.value(), tier.count())
         height = self._tier_height_for(tier, target_rows)
         tier.setFixedHeight(height)
@@ -853,6 +1452,12 @@ class MainWindow(QMainWindow):
         for tier in self.tiers_widgets:
             self._sync_tier_height(tier)
         self._update_size_constraints()
+        if hasattr(self, "tiers_scroll") and hasattr(self, "tiers_container"):
+            viewport_height = self.tiers_scroll.viewport().height()
+            content_height = self.tiers_container.sizeHint().height()
+            if viewport_height > 0 and content_height <= viewport_height:
+                self.tiers_scroll.verticalScrollBar().setValue(0)
+        self._sync_external_tier_scrollbar()
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
         """Remove a song from a tier and return it to the library pane."""
@@ -1001,12 +1606,38 @@ class MainWindow(QMainWindow):
                 continue
             filtered.append(song)
 
-        filtered.sort(
-            key=lambda song: (
-                effective_score(song, lower_official, weight_by_nps=weight_by_nps),
-                (song.name or "").lower(),
+        sort_mode = getattr(self, "sort_mode_combo", None)
+        sort_key = sort_mode.currentData() if sort_mode is not None else "recommended"
+
+        if sort_key == "difficulty_desc":
+            filtered.sort(
+                key=lambda song: (
+                    effective_score(song, lower_official, weight_by_nps=weight_by_nps),
+                    (song.name or "").lower(),
+                ),
+                reverse=True,
             )
-        )
+        elif sort_key == "artist":
+            filtered.sort(
+                key=lambda song: (
+                    strip_color_tags(song.artist or "").lower(),
+                    (song.name or "").lower(),
+                )
+            )
+        elif sort_key == "title":
+            filtered.sort(
+                key=lambda song: (
+                    strip_color_tags(song.name or "").lower(),
+                    strip_color_tags(song.artist or "").lower(),
+                )
+            )
+        else:
+            filtered.sort(
+                key=lambda song: (
+                    effective_score(song, lower_official, weight_by_nps=weight_by_nps),
+                    (song.name or "").lower(),
+                )
+            )
         return filtered
 
     def _refresh_library_view(self) -> None:
@@ -1017,6 +1648,22 @@ class MainWindow(QMainWindow):
         for s in self._eligible_library_songs(apply_search_filter=True, query_mode=query_mode):
             item = self._build_song_item(s)
             self.lib_list.addItem(item)
+        self._update_library_summary()
+
+    def _update_library_summary(self) -> None:
+        """Refresh the library footer summary with the current counts."""
+
+        if not hasattr(self, "library_count_label"):
+            return
+        total = len(self.library)
+        visible = self.lib_list.count()
+        if total and visible != total:
+            text = f"Showing {visible} of {total} songs"
+        elif visible:
+            text = f"{visible} songs"
+        else:
+            text = "No songs loaded"
+        self.library_count_label.setText(text)
 
     def _refresh_tier_tooltips(self) -> None:
         """Update tier item tooltips to reflect current scoring preferences."""
@@ -1109,6 +1756,14 @@ class MainWindow(QMainWindow):
                     self.nps_progress_bar.setFormat(
                         f"NPS scan cancelled ({current} / {self._nps_jobs_total})"
                     )
+        ready_message = "Ready to scan"
+        if (
+            hasattr(self, "nps_progress_bar")
+            and self._nps_jobs_total > 0
+            and self.nps_progress_bar.value() < self._nps_jobs_total
+        ):
+            ready_message = "Scan cancelled"
+        self._reset_scan_progress_ui(message=ready_message)
         self._refresh_library_view()
         self._refresh_tier_tooltips()
 
@@ -1165,10 +1820,13 @@ class MainWindow(QMainWindow):
 
         self._scan_active = True
         self._set_scan_controls_enabled(False)
-        self.progress = QProgressDialog("Scanning songs...", "Cancel", 0, 100, self)
-        self.progress.setWindowModality(Qt.WindowModal)
-        self.progress.setAutoClose(True)
-        self.progress.setMinimumDuration(0)
+        if hasattr(self, "scan_progress_container"):
+            self.scan_progress_container.setVisible(True)
+            self.scan_status_label.setText("Preparing scan…")
+            self.scan_progress_bar.setRange(0, 100)
+            self.scan_progress_bar.setValue(0)
+            self.scan_progress_bar.setFormat("Scanning… %p%")
+            self.btn_cancel_scan.setEnabled(True)
 
         self.thread = QThread(self)
         cache_db = get_cache_path()
@@ -1188,8 +1846,8 @@ class MainWindow(QMainWindow):
         self._set_weight_nps_enabled(False)
 
         self.thread.started.connect(self.worker.run)
-        self.worker.progress.connect(self.progress.setValue)
-        self.worker.message.connect(self.progress.setLabelText)
+        self.worker.progress.connect(self._update_scan_progress_value)
+        self.worker.message.connect(self._update_scan_status)
         self.worker.done.connect(self._scan_finished)
         self.worker.nps_progress.connect(self._on_nps_progress)
         self.worker.nps_update.connect(self._on_nps_update)
@@ -1197,14 +1855,15 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        self.progress.canceled.connect(self.worker.stop)
+        if hasattr(self, "btn_cancel_scan"):
+            self.btn_cancel_scan.setEnabled(True)
 
         try:
             self.thread.start()
-            self.progress.show()
         except Exception:
             self._scan_active = False
             self._set_scan_controls_enabled(True)
+            self._reset_scan_progress_ui(message="Ready to scan")
             raise
 
     def _scan_finished(self, songs: List[Song]) -> None:
@@ -1212,7 +1871,12 @@ class MainWindow(QMainWindow):
         self.library = songs
         self._songs_by_path = {song.path: song for song in songs}
         self._refresh_library_view()
-        self.progress.close()
+        if hasattr(self, "scan_progress_container"):
+            self.scan_progress_container.setVisible(True)
+            self.scan_progress_bar.setValue(100)
+            self.scan_progress_bar.setFormat("Scan complete")
+            self.scan_status_label.setText("Scan complete")
+            self.btn_cancel_scan.setEnabled(False)
         extra_note = ""
         if self._nps_jobs_total > 0:
             extra_note = "\nNPS values are still being computed in the background."
