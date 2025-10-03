@@ -1,25 +1,4 @@
-The most recent discussion I had with codex was the following. Please use these notes as informative context, so you can catch up and we can re-start the conversation accordingly.
-
-# Topic: PyInstaller entry point wrapper for background scans
-
-## User desires
-Create a dedicated PyInstaller-friendly launcher so frozen builds avoid spawning extra GUI windows while keeping normal `python -m ch_career_mode` execution unchanged.
-
-## Specifics of user desires
-Add a root-level `app_entry.py` that imports `main` from `ch_career_mode.__main__`, wraps execution in an `if __name__ == "__main__"` block with `multiprocessing.freeze_support()`, and document that it's solely for PyInstaller on Windows. Update README build instructions to point PyInstaller at the new script.
-
-## Actions taken
-- Added `app_entry.py` with the freeze-support guard and explanatory comment while delegating to the package main function.
-- Updated the README to reference the new PyInstaller command (`pyinstaller --noconsole --onefile app_entry.py`).
-- Re-ran `python -m compileall ch_career_mode` to ensure the package still compiles without syntax issues.
-
-## Helpful hints about conversation & relevant code paths:
-- `app_entry.py` should be used when building Windows executables with PyInstaller to avoid multiprocessing GUI duplication.
-- `ch_career_mode/__main__.py` remains the entry point for standard module execution (`python -m ch_career_mode`).
-
-With this context in mind, I have a follow up query:
----
-# Session 4 — 2025-09-25 11:10
+# Session 1 — 2025-09-25 11:10
 
 ## Topic
 Safeguard the tier builder width during startup and resizing.
@@ -42,6 +21,9 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
+
+---
+
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
@@ -67,7 +49,10 @@ Restyle the PySide6 GUI to feel modern and cohesive, embed scan progress within 
 - Tier headers rely on `TIER_HEADER_COLORS`; adjust these arrays for alternate accent palettes.
 - The library footer updates via `_update_library_summary()`—call it after any manual list mutations.
 ---
-# Session 1 — 2025-09-25 09:38
+
+---
+
+# Session 3 — 2025-09-25 09:38
 
 ## Topic
 Relocate and redesign NPS scan progress bar in settings UI.
@@ -87,7 +72,10 @@ Make the NPS scan status more prominent and associated with the selected directo
 ## Helpful Hints
 - Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
-# Session 2 — 2025-09-25 10:15
+
+---
+
+# Session 4 — 2025-09-25 10:15
 
 ## Topic
 Rebalance main window layout widths and regroup settings controls.
@@ -110,7 +98,10 @@ Ensure the tier builder remains fully visible, keep settings from collapsing, an
 - `_update_size_constraints` re-applies card minimums after state changes; call it after altering column counts or resizes.
 - Adjust `LIBRARY_MIN_WIDTH`, `SETTINGS_MIN_WIDTH`, or `TIER_COLUMN_MIN_WIDTH` for global layout tweaks without touching widget construction.
 ---
-# Session 3 — 2025-09-25 10:45
+
+---
+
+# Session 5 — 2025-09-25 10:45
 
 ## Topic
 Rollback window refactor to material-themed baseline.
@@ -132,7 +123,10 @@ Restore the GUI implementation to the state captured in commit e07301b after bei
 - Future tweaks should branch from commit e07301b to preserve the material-themed baseline the user prefers.
 - Use `git fetch https://github.com/xdtrammell/CH-Career-Mode.git` to pull additional commits if more history is required.
 ---
-# Session 5 — 2025-10-02 09:23
+
+---
+
+# Session 6 — 2025-10-02 09:23
 
 ## Topic
 Buffer the launch width so tier columns remain visible by default.
@@ -154,7 +148,10 @@ Keep all three tier columns visible when the window opens while preserving exist
 - Adjust the buffer in `DEFAULT_WINDOW_SIZE` if tier column minimum widths or panel minimums change in the future.
 - Call `_update_size_constraints()` whenever column counts change so the guard check can reapply the buffered width.
 ---
-# Session 6 — 2025-10-02 09:55
+
+---
+
+# Session 7 — 2025-10-02 09:55
 
 ## Topic
 Recalculate minimum widths so the tier builder's third column is visible on launch.
@@ -176,7 +173,10 @@ Guarantee all three tier columns render without truncation at startup while pres
 - Adjust `CARD_CONTENT_MARGIN` if card padding changes to keep window and panel width calculations aligned.
 - When modifying tier layout margins or column counts, update `TIERS_PANEL_MIN_WIDTH` so `_update_size_constraints()` stays accurate.
 ---
-# Session 7 — 2025-10-02 10:25
+
+---
+
+# Session 8 — 2025-10-02 10:25
 
 ## Topic
 Account for window decorations when sizing the main window.
@@ -198,7 +198,10 @@ Ensure the tier builder's third column is always visible at startup by padding t
 - The `_decoration_padding()` helper should be reused if future features need to guarantee full column visibility after dynamic layout changes.
 - If tier column counts change, update the underlying constants before relying on the padding helper to avoid stale minimums.
 ---
-# Session 8 — 2025-10-02 09:51
+
+---
+
+# Session 9 — 2025-10-02 09:51
 
 ## Topic
 Recalculate tier panel minimum width using explicit layout margins.
@@ -220,7 +223,10 @@ Ensure the tier builder columns are fully visible at launch by correcting the wi
 - Any future change to the tier grid spacing should update `TIER_GRID_LAYOUT_MARGIN` to keep derived widths in sync.
 - Verify `_update_size_constraints()` if additional padding constants are introduced so the enforced widths remain accurate.
 ---
-# Session 9 — 2025-10-02 10:20
+
+---
+
+# Session 10 — 2025-10-02 10:20
 
 ## Topic
 Ensure tier builder columns remain fully visible via layout constraints.
@@ -242,7 +248,10 @@ Keep all three tier columns visible at startup by fixing the Tier Builder layout
 - If tier counts or minimum widths change, update the shared constants so the grid and window constraints stay aligned.
 - When introducing new tier layouts, reuse the column minimum width call to avoid regressions in the initial viewport.
 ---
-# Session 10 — 2025-10-02 10:50
+
+---
+
+# Session 11 — 2025-10-02 10:50
 
 ## Topic
 Align tier builder scrollbar behaviour with layout padding.
@@ -264,7 +273,10 @@ Stop the Tier Builder panel from showing a vertical scrollbar by default and sty
 - If tier card padding or row heights change, revisit `_sync_all_tier_heights()` so the viewport comparison remains accurate.
 - The Fluent scrollbar styling is scoped to `tiersScroll`; reuse this object name for future tier scroll replacements to inherit the same aesthetic.
 ---
-# Session 11 — 2025-10-02 11:15
+
+---
+
+# Session 12 — 2025-10-02 11:15
 
 ## Topic
 Reposition tier builder scrollbar gutter spacing.
@@ -286,7 +298,10 @@ Make the tier builder scrollbar feel external to the third column and keep it sl
 - Update `TIER_SCROLL_GUTTER_WIDTH` if future visual tweaks require a wider or narrower gutter between the tier builder and workflow panels.
 - The spacer widget keeps the gutter padding consistent; replace it with a styled frame if a visible divider is desired later.
 ---
-# Session 12 — 2025-10-02 12:45
+
+---
+
+# Session 13 — 2025-10-02 12:45
 
 ## Topic
 External tier scrollbar gutter integration.
@@ -307,4 +322,6 @@ Ensure the tier builder's third column stays visible while relocating the vertic
 ## Helpful Hints
 - `_sync_external_tier_scrollbar()` centralises all mirroring logic; call it after any manual scrollbar adjustments to keep the gutter bar consistent.
 - Adjust `EXTERNAL_VBAR_WIDTH` and `TIER_SCROLL_GUTTER_WIDTH` together if the gutter's visual weight changes in future design tweaks.
+---
+
 ---
