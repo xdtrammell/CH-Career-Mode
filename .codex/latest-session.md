@@ -21,6 +21,29 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
+
+# Session 20 — 2025-10-05 09:45
+
+## Topic
+Unify the scan workflow UI with a single Scan Card and replace modal dialogs with inline notifications.
+
+## User Desires
+The user wanted one progress indicator that spans both scan phases, inline toasts instead of blocking message boxes, and a workflow notice when the cache is already warm.
+
+## Specifics of User Desires
+They asked for a Scan Card widget that tracks phase (1/2 and 2/2), supports cancel and hide actions, remembers collapse state via QSettings, shows inline InfoBars for milestones, and exposes a “Rescan anyway” action when a warm-cache notification appears.
+
+## Actions Taken
+- Added `ScanCard` and `InfoBar` helpers in `gui.py` and wired new scan-state constants with `_set_scan_state`, `_refresh_scan_detail`, and `_finalize_scan_completion` inside `MainWindow`.
+- Replaced the dual progress bars by embedding the Scan Card under the workflow buttons, updating `MainWindow.scan_now`, `_scan_finished`, `_on_nps_progress`, and `_on_nps_done` to share the single progress bar and display inline messages.
+- Implemented warm-cache detection in `MainWindow.scan_now`, surfaced the top-level InfoBar with a “Rescan anyway” action, and added keyboard affordances so Escape focuses the cancel button while the scan card handles Enter/Space toggles post-completion.
+
+## Helpful Hints
+- `MainWindow._show_workflow_infobar` and `_show_scan_infobar` ensure new InfoBars replace any existing ones—call them instead of instantiating `InfoBar` directly.
+- `MainWindow._cache_is_warm` uses the stored `last_scan_completed_ts`; adjust `CACHE_WARM_THRESHOLD_SECONDS` if the warm-cache window should change.
+- The Scan Card collapse preference lives under the `scan_card_collapsed` key—reset it whenever a new scan should force the card open.
+
+---
 ---
 
 # Session 2 — 2025-10-03 14:10

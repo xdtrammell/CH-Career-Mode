@@ -1,13 +1,25 @@
 """Qt GUI for scanning libraries, arranging tiers, and exporting setlists."""
 
+import hashlib
 import math
 import os
 import random
 import time
-from typing import Dict, List, Optional
+from datetime import datetime
+from typing import Callable, Dict, List, Optional
 from dataclasses import replace
 
-from PySide6.QtCore import Qt, QSize, QSettings, QThread, QTimer, QMargins
+from PySide6.QtCore import (
+    Qt,
+    QSize,
+    QSettings,
+    QThread,
+    QTimer,
+    QMargins,
+    Signal,
+    QPropertyAnimation,
+    QEasingCurve,
+)
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -34,6 +46,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QFrame,
     QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
     QProgressBar,
     QToolBox,
     QToolButton,
@@ -196,7 +209,7 @@ QFrame#panelCard {{
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.04);
 }}
-QFrame#scanProgress, QFrame#folderCard {{
+QFrame#folderCard {{
     background-color: rgba(255, 255, 255, 0.03);
     border-radius: 10px;
     border: 1px solid rgba(255, 255, 255, 0.05);
@@ -285,6 +298,64 @@ QProgressBar::chunk {{
     background-color: {accent};
 }}
 
+QFrame#scanCard {{
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}}
+QFrame#scanCard[hasFocus="true"] {{
+    border-color: rgba(94, 129, 255, 0.55);
+    box-shadow: 0 0 0 1px rgba(94, 129, 255, 0.25);
+}}
+QLabel#scanPhaseLabel {{
+    font-weight: 600;
+    font-size: 10pt;
+    letter-spacing: 0.3px;
+}}
+QLabel#scanDetailLabel {{
+    color: rgba(244, 246, 251, 0.74);
+}}
+QToolButton#scanHideButton {{
+    border: none;
+    color: rgba(244, 246, 251, 0.75);
+    padding: 4px 10px;
+}}
+QToolButton#scanHideButton:hover {{
+    color: rgba(244, 246, 251, 0.95);
+    text-decoration: underline;
+}}
+QFrame#infoBar {{
+    border-radius: 10px;
+    padding: 8px 12px;
+}}
+QFrame#infoBar[kind="info"] {{
+    background-color: rgba(94, 129, 255, 0.16);
+    border: 1px solid rgba(94, 129, 255, 0.35);
+}}
+QFrame#infoBar[kind="success"] {{
+    background-color: rgba(82, 196, 120, 0.14);
+    border: 1px solid rgba(82, 196, 120, 0.32);
+}}
+QFrame#infoBar[kind="warning"] {{
+    background-color: rgba(255, 196, 74, 0.16);
+    border: 1px solid rgba(255, 196, 74, 0.32);
+}}
+QLabel#infoBarIcon {{
+    font-size: 12pt;
+}}
+QLabel#infoBarText {{
+    color: rgba(244, 246, 251, 0.9);
+}}
+QToolButton#infoBarAction {{
+    border: none;
+    color: {accent};
+    font-weight: 600;
+    padding: 4px 8px;
+}}
+QToolButton#infoBarAction:hover {{
+    text-decoration: underline;
+}}
+
 QScrollArea {{
     background: transparent;
     border: none;
@@ -348,6 +419,295 @@ QLabel#sectionTitle {{
     letter-spacing: 0.4px;
 }}
 """
+
+SCAN_IDLE = "scan_idle"
+SCAN_PHASE1 = "scan_phase1"
+SCAN_PHASE2 = "scan_phase2"
+SCAN_COMPLETE = "scan_complete"
+SCAN_CANCELLED = "scan_cancelled"
+SCAN_ERROR = "scan_error"
+
+INFOBAR_KIND_INFO = "info"
+INFOBAR_KIND_SUCCESS = "success"
+INFOBAR_KIND_WARNING = "warning"
+
+CACHE_WARM_THRESHOLD_SECONDS = 5 * 60
+
+
+class InfoBar(QFrame):
+    """Lightweight inline notification with optional action and fade animations."""
+
+    closed = Signal()
+
+    def __init__(
+        self,
+        text: str,
+        *,
+        kind: str = INFOBAR_KIND_INFO,
+        action_text: Optional[str] = None,
+        action: Optional[Callable[[], None]] = None,
+        duration_ms: int = 4000,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("infoBar")
+        self.setProperty("kind", kind)
+        self.setFocusPolicy(Qt.NoFocus)
+        self._action_callback = action
+        self._duration_ms = max(0, duration_ms)
+        self._closing = False
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(10)
+
+        self._icon_label = QLabel(self)
+        self._icon_label.setObjectName("infoBarIcon")
+        self._icon_label.setText(self._icon_for_kind(kind))
+        layout.addWidget(self._icon_label)
+
+        self._text_label = QLabel(text, self)
+        self._text_label.setObjectName("infoBarText")
+        self._text_label.setWordWrap(True)
+        layout.addWidget(self._text_label, 1)
+
+        layout.addStretch(1)
+
+        self._action_button: Optional[QToolButton]
+        if action_text and action is not None:
+            btn = QToolButton(self)
+            btn.setObjectName("infoBarAction")
+            btn.setText(action_text)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFocusPolicy(Qt.NoFocus)
+            btn.clicked.connect(self._on_action_clicked)
+            layout.addWidget(btn)
+            self._action_button = btn
+        else:
+            self._action_button = None
+
+        self._effect = QGraphicsOpacityEffect(self)
+        self._effect.setOpacity(0.0)
+        self.setGraphicsEffect(self._effect)
+
+        self._fade_in = QPropertyAnimation(self._effect, b"opacity", self)
+        self._fade_in.setDuration(180)
+        self._fade_in.setStartValue(0.0)
+        self._fade_in.setEndValue(1.0)
+        self._fade_in.setEasingCurve(QEasingCurve.OutCubic)
+
+        self._fade_out = QPropertyAnimation(self._effect, b"opacity", self)
+        self._fade_out.setDuration(220)
+        self._fade_out.setStartValue(1.0)
+        self._fade_out.setEndValue(0.0)
+        self._fade_out.setEasingCurve(QEasingCurve.InCubic)
+        self._fade_out.finished.connect(self._on_fade_out_finished)
+
+        self._dismiss_timer = QTimer(self)
+        self._dismiss_timer.setSingleShot(True)
+        self._dismiss_timer.timeout.connect(self.close_with_animation)
+
+    def _icon_for_kind(self, kind: str) -> str:
+        return {
+            INFOBAR_KIND_INFO: "ℹ",
+            INFOBAR_KIND_SUCCESS: "✔",
+            INFOBAR_KIND_WARNING: "⚠",
+        }.get(kind, "ℹ")
+
+    def set_message(self, text: str) -> None:
+        """Update the displayed message."""
+
+        self._text_label.setText(text)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        super().showEvent(event)
+        self._closing = False
+        self._fade_in.stop()
+        self._fade_out.stop()
+        self._effect.setOpacity(0.0)
+        self._fade_in.start()
+        if self._duration_ms:
+            self._dismiss_timer.start(self._duration_ms)
+
+    def _on_action_clicked(self) -> None:
+        if self._action_callback is not None:
+            try:
+                self._action_callback()
+            finally:
+                self.close_with_animation()
+        else:
+            self.close_with_animation()
+
+    def close_with_animation(self) -> None:
+        """Trigger fade-out and emit ``closed`` when finished."""
+
+        if self._closing:
+            return
+        self._closing = True
+        self._dismiss_timer.stop()
+        self._fade_out.stop()
+        self._fade_out.setStartValue(self._effect.opacity())
+        self._fade_out.start()
+
+    def _on_fade_out_finished(self) -> None:
+        self.hide()
+        self.closed.emit()
+        self.deleteLater()
+
+
+class ScanCard(QFrame):
+    """Stylised card that encapsulates scan progress and actions."""
+
+    cancel_requested = Signal()
+    hide_requested = Signal()
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("scanCard")
+        self.setFocusPolicy(Qt.StrongFocus)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        self.lbl_phase = QLabel("Ready to scan", self)
+        self.lbl_phase.setObjectName("scanPhaseLabel")
+        layout.addWidget(self.lbl_phase)
+
+        self.lbl_detail = QLabel("", self)
+        self.lbl_detail.setObjectName("scanDetailLabel")
+        self.lbl_detail.setWordWrap(True)
+        layout.addWidget(self.lbl_detail)
+
+        self._info_container = QWidget(self)
+        self._info_layout = QVBoxLayout(self._info_container)
+        self._info_layout.setContentsMargins(0, 0, 0, 0)
+        self._info_layout.setSpacing(6)
+        self._info_container.setVisible(False)
+        layout.addWidget(self._info_container)
+        self._active_infobar: Optional[InfoBar] = None
+
+        self.progress = QProgressBar(self)
+        self.progress.setRange(0, 100)
+        self.progress.setValue(0)
+        self.progress.setTextVisible(False)
+        layout.addWidget(self.progress)
+
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(8)
+        actions.addStretch(1)
+
+        self.btn_cancel = QToolButton(self)
+        self.btn_cancel.setObjectName("cancelButton")
+        self.btn_cancel.setText("Cancel")
+        self.btn_cancel.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_cancel.clicked.connect(self.cancel_requested.emit)
+        actions.addWidget(self.btn_cancel)
+
+        self.btn_hide = QToolButton(self)
+        self.btn_hide.setObjectName("scanHideButton")
+        self.btn_hide.setText("Hide")
+        self.btn_hide.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_hide.setCursor(Qt.PointingHandCursor)
+        self.btn_hide.setVisible(False)
+        self.btn_hide.clicked.connect(self.hide_requested.emit)
+        actions.addWidget(self.btn_hide)
+
+        layout.addLayout(actions)
+
+        self._collapsed = True
+        self._state = SCAN_IDLE
+        self.setVisible(False)
+
+    def focusInEvent(self, event) -> None:  # type: ignore[override]
+        self.setProperty("hasFocus", True)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event) -> None:  # type: ignore[override]
+        self.setProperty("hasFocus", False)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        super().focusOutEvent(event)
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            if self.btn_hide.isVisible():
+                self.btn_hide.click()
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
+    def set_state(self, state: str) -> None:
+        self._state = state
+
+    def state(self) -> str:
+        return self._state
+
+    def set_phase_text(self, text: str) -> None:
+        self.lbl_phase.setText(text)
+
+    def set_detail_text(self, text: str) -> None:
+        self.lbl_detail.setText(text)
+
+    def set_progress_range(self, minimum: int, maximum: int) -> None:
+        self.progress.setRange(minimum, maximum)
+
+    def set_progress_value(self, value: int) -> None:
+        self.progress.setValue(value)
+
+    def set_cancel_enabled(self, enabled: bool) -> None:
+        self.btn_cancel.setEnabled(enabled)
+
+    def set_cancel_visible(self, visible: bool) -> None:
+        self.btn_cancel.setVisible(visible)
+
+    def set_hide_visible(self, visible: bool) -> None:
+        self.btn_hide.setVisible(visible)
+
+    def ensure_visible(self) -> None:
+        if self._collapsed:
+            self.set_collapsed(False)
+
+    def set_collapsed(self, collapsed: bool) -> None:
+        if self._collapsed == collapsed:
+            return
+        self._collapsed = collapsed
+        self.setVisible(not collapsed)
+
+    def is_collapsed(self) -> bool:
+        return self._collapsed
+
+    def focus_cancel_button(self) -> None:
+        if self.btn_cancel.isVisible():
+            self.btn_cancel.setFocus(Qt.OtherFocusReason)
+
+    def set_info_bar(self, bar: Optional[InfoBar]) -> None:
+        if self._active_infobar is bar:
+            return
+        if self._active_infobar is not None:
+            try:
+                self._active_infobar.closed.disconnect(self._on_infobar_closed)
+            except Exception:
+                pass
+            self._active_infobar.setParent(None)
+            self._active_infobar.deleteLater()
+            self._active_infobar = None
+        if bar is not None:
+            self._active_infobar = bar
+            self._info_layout.addWidget(bar)
+            self._info_container.setVisible(True)
+            bar.closed.connect(self._on_infobar_closed)
+            bar.show()
+        else:
+            self._info_container.setVisible(False)
+
+    def _on_infobar_closed(self) -> None:
+        self._active_infobar = None
+        self._info_container.setVisible(False)
 
 LIBRARY_LIST_STYLE = """
 QListWidget {{
@@ -533,6 +893,20 @@ class MainWindow(QMainWindow):
         self.current_tier_names: List[str] = []
         self._procedural_seed = None
         self._scan_active = False
+        self._scan_state = SCAN_IDLE
+        self._scan_cancel_requested = False
+        self._phase1_complete = False
+        self._scan_status_message = ""
+        self._phase1_percent = 0
+        self._phase2_completed = 0
+        self._phase2_total = 0
+        self._last_scan_signature: Optional[str] = None
+        self._last_scan_completed_ts = float(self.settings.value("last_scan_completed_ts", 0.0))
+        self._scan_card_collapsed_pref = bool(self.settings.value("scan_card_collapsed", False, type=bool))
+        self._pending_warm_cache_override = False
+        self._workflow_infobar: Optional[InfoBar] = None
+        self._scan_infobar: Optional[InfoBar] = None
+        self._library_changed = False
 
         self.btn_pick = QPushButton("Pick Songs Folder…")
         self.btn_scan = QPushButton("Scan Library")
@@ -579,24 +953,6 @@ class MainWindow(QMainWindow):
         self.chk_weight_nps.setChecked(weight_by_nps_setting)
         self._default_weight_nps_tooltip = "Adds Avg/Peak NPS to the difficulty score when enabled."
         self.chk_weight_nps.setToolTip(self._default_weight_nps_tooltip)
-
-        self.nps_progress_bar = QProgressBar()
-        self.nps_progress_bar.setRange(0, 1)
-        self.nps_progress_bar.setValue(0)
-        self.nps_progress_bar.setTextVisible(True)
-        self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
-        self.nps_progress_bar.setVisible(False)
-        self.nps_complete_label = QLabel("NPS scan complete")
-        self.nps_complete_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.nps_complete_label.setVisible(False)
-        self.nps_status_container = QFrame()
-        self.nps_status_container.setObjectName("scanProgress")
-        nps_status_layout = QVBoxLayout(self.nps_status_container)
-        nps_status_layout.setContentsMargins(0, 0, 0, 0)
-        nps_status_layout.setSpacing(4)
-        nps_status_layout.addWidget(self.nps_progress_bar)
-        nps_status_layout.addWidget(self.nps_complete_label)
-        self.nps_status_container.setVisible(False)
 
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
@@ -844,34 +1200,19 @@ class MainWindow(QMainWindow):
 
         self._refresh_workflow_button_minimums()
 
-        self.scan_progress_container = QFrame()
-        self.scan_progress_container.setObjectName("scanProgress")
-        scan_layout = QVBoxLayout(self.scan_progress_container)
-        scan_layout.setContentsMargins(0, 0, 0, 0)
-        scan_layout.setSpacing(6)
-        status_header = QHBoxLayout()
-        status_header.setContentsMargins(0, 0, 0, 0)
-        status_header.setSpacing(8)
-        self.scan_status_label = QLabel("Ready to scan")
-        status_header.addWidget(self.scan_status_label, 1)
-        self.btn_cancel_scan = QToolButton()
-        self.btn_cancel_scan.setText("Cancel")
-        self.btn_cancel_scan.setObjectName("cancelButton")
-        self.btn_cancel_scan.setEnabled(False)
-        self.btn_cancel_scan.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.btn_cancel_scan.setCursor(Qt.PointingHandCursor)
-        status_header.addWidget(self.btn_cancel_scan)
-        scan_layout.addLayout(status_header)
-        self.scan_progress_bar = QProgressBar()
-        self.scan_progress_bar.setRange(0, 100)
-        self.scan_progress_bar.setValue(0)
-        self.scan_progress_bar.setFormat("Ready to scan")
-        self.scan_progress_bar.setTextVisible(True)
-        scan_layout.addWidget(self.scan_progress_bar)
-        self.scan_progress_container.setVisible(False)
-        settings_layout.addWidget(self.scan_progress_container)
+        self._workflow_infobar_host = QWidget()
+        workflow_infobar_layout = QVBoxLayout(self._workflow_infobar_host)
+        workflow_infobar_layout.setContentsMargins(0, 0, 0, 0)
+        workflow_infobar_layout.setSpacing(6)
+        self._workflow_infobar_layout = workflow_infobar_layout
+        self._workflow_infobar_host.setVisible(False)
+        settings_layout.addWidget(self._workflow_infobar_host)
 
-        settings_layout.addWidget(self.nps_status_container)
+        self.scan_card = ScanCard()
+        self.scan_card.set_collapsed(True)
+        settings_layout.addWidget(self.scan_card)
+        self.scan_card.cancel_requested.connect(self._cancel_scan)
+        self.scan_card.hide_requested.connect(self._hide_scan_card)
 
         self.settings_toolbox = QToolBox()
 
@@ -931,7 +1272,6 @@ class MainWindow(QMainWindow):
         self.btn_auto.clicked.connect(self.auto_arrange)
         self.btn_export.clicked.connect(self.export_now)
         self.btn_clear_cache.clicked.connect(self.clear_cache)
-        self.btn_cancel_scan.clicked.connect(self._cancel_scan)
         self.spin_tiers.valueChanged.connect(self._on_tier_count_changed)
         self.search_box.textChanged.connect(self._refresh_library_view)
         self.sort_mode_combo.currentIndexChanged.connect(self._refresh_library_view)
@@ -949,12 +1289,23 @@ class MainWindow(QMainWindow):
         self._sync_external_tier_scrollbar()
         QTimer.singleShot(0, self._sync_all_tier_heights)
         QTimer.singleShot(0, self._refresh_workflow_buttons_and_update)
+        self._reset_scan_progress_ui()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if not getattr(self, "_workflow_minimums_refreshed_on_show", False):
             self._workflow_minimums_refreshed_on_show = True
             self._refresh_workflow_buttons_and_update()
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        if event.key() == Qt.Key_Escape and self._scan_state in (SCAN_PHASE1, SCAN_PHASE2):
+            card = getattr(self, "scan_card", None)
+            if card is not None:
+                card.ensure_visible()
+                card.focus_cancel_button()
+                event.accept()
+                return
+        super().keyPressEvent(event)
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -987,36 +1338,287 @@ class MainWindow(QMainWindow):
         self.chk_weight_nps.setEnabled(enabled)
         self.chk_weight_nps.setToolTip(tooltip)
 
-    def _update_scan_progress_value(self, value: int) -> None:
-        """Reflect scan progress in the embedded progress bar."""
+    def _default_scan_detail(self, state: str) -> str:
+        """Return fallback detail text for the current scan *state*."""
 
-        if not hasattr(self, "scan_progress_bar"):
+        if state == SCAN_PHASE1:
+            return "Parsing song metadata…"
+        if state == SCAN_PHASE2:
+            return "Computing chart NPS. This may take a few minutes."
+        if state == SCAN_COMPLETE:
+            return "Scan complete."
+        if state == SCAN_CANCELLED:
+            return "Scan cancelled. Results may be incomplete."
+        if state == SCAN_ERROR:
+            return "Scan failed. Please try again."
+        return "Ready to scan your library."
+
+    def _set_scan_state(self, state: str, *, detail: Optional[str] = None) -> None:
+        """Transition to *state* and update the Scan Card presentation."""
+
+        self._scan_state = state
+        if detail is None:
+            self._scan_status_message = ""
+        else:
+            self._scan_status_message = detail
+        if state == SCAN_IDLE:
+            self._phase1_percent = 0
+            self._phase2_completed = 0
+            self._phase2_total = 0
+        card = getattr(self, "scan_card", None)
+        if card is None:
+            return
+
+        if state == SCAN_IDLE:
+            card.set_state(state)
+            card.set_phase_text("Scan ready")
+            card.set_cancel_visible(False)
+            card.set_cancel_enabled(False)
+            card.set_hide_visible(False)
+            card.set_progress_range(0, 100)
+            card.set_progress_value(0)
+            card.set_collapsed(True)
+        elif state == SCAN_PHASE1:
+            card.set_state(state)
+            card.ensure_visible()
+            card.set_phase_text("Scanning library (1/2)")
+            card.set_cancel_visible(True)
+            card.set_cancel_enabled(not self._scan_cancel_requested)
+            card.set_hide_visible(False)
+            card.set_progress_range(0, 100)
+        elif state == SCAN_PHASE2:
+            card.set_state(state)
+            card.ensure_visible()
+            card.set_phase_text("Computing chart NPS (2/2)")
+            card.set_cancel_visible(True)
+            card.set_cancel_enabled(not self._scan_cancel_requested)
+            card.set_hide_visible(False)
+            card.set_progress_range(0, max(1, self._phase2_total))
+        elif state == SCAN_COMPLETE:
+            card.set_state(state)
+            card.ensure_visible()
+            card.set_phase_text("Scan complete")
+            card.set_cancel_visible(False)
+            card.set_cancel_enabled(False)
+            card.set_hide_visible(True)
+            card.set_progress_range(0, 1)
+            card.set_progress_value(1)
+            card.set_collapsed(False)
+        elif state == SCAN_CANCELLED:
+            card.set_state(state)
+            card.ensure_visible()
+            card.set_phase_text("Scan cancelled")
+            card.set_cancel_visible(False)
+            card.set_cancel_enabled(False)
+            card.set_hide_visible(True)
+            card.set_collapsed(False)
+        elif state == SCAN_ERROR:
+            card.set_state(state)
+            card.ensure_visible()
+            card.set_phase_text("Scan failed")
+            card.set_cancel_visible(False)
+            card.set_cancel_enabled(False)
+            card.set_hide_visible(True)
+            card.set_collapsed(False)
+        self._refresh_scan_detail()
+
+    def _refresh_scan_detail(self) -> None:
+        """Apply the current status/detail text to the Scan Card."""
+
+        card = getattr(self, "scan_card", None)
+        if card is None:
+            return
+        base = self._scan_status_message or self._default_scan_detail(self._scan_state)
+        if self._scan_state == SCAN_PHASE1:
+            if self._phase1_percent:
+                detail = f"{base} ({self._phase1_percent}% complete)"
+            else:
+                detail = base
+        elif self._scan_state == SCAN_PHASE2:
+            if self._phase2_total > 0:
+                detail = f"{base} ({self._phase2_completed} / {self._phase2_total})"
+            else:
+                detail = base
+        else:
+            detail = base
+        card.set_detail_text(detail)
+
+    def _show_scan_infobar(
+        self,
+        text: str,
+        *,
+        kind: str = INFOBAR_KIND_INFO,
+        duration_ms: int = 3500,
+    ) -> None:
+        card = getattr(self, "scan_card", None)
+        if card is None:
+            return
+        self._clear_scan_infobar()
+        bar = InfoBar(text, kind=kind, duration_ms=duration_ms, parent=card)
+        self._scan_infobar = bar
+        card.set_info_bar(bar)
+        bar.closed.connect(lambda: self._on_scan_infobar_closed(bar))
+
+    def _on_scan_infobar_closed(self, bar: InfoBar) -> None:
+        if self._scan_infobar is bar:
+            self._scan_infobar = None
+
+    def _clear_scan_infobar(self) -> None:
+        if self._scan_infobar is not None:
+            try:
+                self._scan_infobar.close_with_animation()
+            except Exception:
+                self._scan_infobar.deleteLater()
+            self._scan_infobar = None
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.set_info_bar(None)
+
+    def _show_workflow_infobar(
+        self,
+        text: str,
+        *,
+        kind: str = INFOBAR_KIND_INFO,
+        action_text: Optional[str] = None,
+        action: Optional[Callable[[], None]] = None,
+        duration_ms: int = 5000,
+    ) -> None:
+        host = getattr(self, "_workflow_infobar_host", None)
+        layout = getattr(self, "_workflow_infobar_layout", None)
+        if host is None or layout is None:
+            return
+        self._clear_workflow_infobar()
+        bar = InfoBar(
+            text,
+            kind=kind,
+            action_text=action_text,
+            action=action,
+            duration_ms=duration_ms,
+            parent=host,
+        )
+        self._workflow_infobar = bar
+        layout.addWidget(bar)
+        host.setVisible(True)
+        bar.closed.connect(lambda: self._on_workflow_infobar_closed(bar))
+
+    def _on_workflow_infobar_closed(self, bar: InfoBar) -> None:
+        if self._workflow_infobar is bar:
+            self._workflow_infobar = None
+            if hasattr(self, "_workflow_infobar_host"):
+                self._workflow_infobar_host.setVisible(False)
+
+    def _clear_workflow_infobar(self) -> None:
+        if self._workflow_infobar is not None:
+            try:
+                self._workflow_infobar.close_with_animation()
+            except Exception:
+                self._workflow_infobar.deleteLater()
+            self._workflow_infobar = None
+        host = getattr(self, "_workflow_infobar_host", None)
+        if host is not None:
+            host.setVisible(False)
+
+    def _hide_scan_card(self) -> None:
+        """Collapse the Scan Card and persist the user's preference."""
+
+        self._scan_card_collapsed_pref = True
+        self.settings.setValue("scan_card_collapsed", True)
+        self._clear_scan_infobar()
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.set_collapsed(True)
+        if self._scan_state in (SCAN_COMPLETE, SCAN_CANCELLED, SCAN_ERROR):
+            self._set_scan_state(SCAN_IDLE)
+
+    def _start_forced_rescan(self) -> None:
+        """Handle the warm-cache action to immediately launch a rescan."""
+
+        self._pending_warm_cache_override = True
+        self._clear_workflow_infobar()
+        self.scan_now(force=True)
+
+    def _cache_is_warm(self) -> bool:
+        """Return True when the cache is considered warm and can be skipped."""
+
+        if self._pending_warm_cache_override:
+            return False
+        if not self.root_folder:
+            return False
+        cache_path = get_cache_path(create=False)
+        if not cache_path or not os.path.exists(cache_path):
+            return False
+        if self._last_scan_completed_ts <= 0:
+            return False
+        return (time.time() - self._last_scan_completed_ts) < CACHE_WARM_THRESHOLD_SECONDS
+
+    def _format_last_scan_timestamp(self) -> str:
+        """Return a human-readable timestamp for the last completed scan."""
+
+        if self._last_scan_completed_ts <= 0:
+            return "unknown"
+        dt = datetime.fromtimestamp(self._last_scan_completed_ts)
+        return dt.strftime("%b %d, %Y %H:%M")
+
+    def _compute_library_signature(self, songs: List[Song]) -> str:
+        """Build a stable signature representing the scanned library contents."""
+
+        hasher = hashlib.sha1()
+        for song in sorted(songs, key=lambda s: (s.path or "").lower()):
+            path = song.path or ""
+            hasher.update(path.encode("utf-8", "ignore"))
+            hasher.update(b"|")
+            hasher.update(str(song.diff_guitar or 0).encode("ascii", "ignore"))
+            hasher.update(b"|")
+            hasher.update(f"{song.score:.4f}".encode("ascii", "ignore"))
+            hasher.update(b"|")
+            hasher.update((song.chart_md5 or "").encode("utf-8", "ignore"))
+            hasher.update(b"|")
+            hasher.update(f"{song.nps_avg:.3f}".encode("ascii", "ignore"))
+            hasher.update(b"|")
+            hasher.update(f"{song.nps_peak:.3f}".encode("ascii", "ignore"))
+            hasher.update(b"\n")
+        return hasher.hexdigest()
+
+    def _finalize_scan_completion(self, *, detail: Optional[str] = None) -> None:
+        """Mark the scan as complete, persisting timestamps and UI state."""
+
+        self._clear_scan_infobar()
+        final_detail = detail or self._scan_status_message or self._default_scan_detail(SCAN_COMPLETE)
+        self._scan_status_message = final_detail
+        self._set_scan_state(SCAN_COMPLETE, detail=final_detail)
+        self._scan_card_collapsed_pref = False
+        self.settings.setValue("scan_card_collapsed", False)
+        self._last_scan_completed_ts = time.time()
+        self.settings.setValue("last_scan_completed_ts", self._last_scan_completed_ts)
+        self._pending_warm_cache_override = False
+        self._refresh_scan_detail()
+
+    def _update_scan_progress_value(self, value: int) -> None:
+        """Reflect scan progress in the Scan Card progress bar."""
+
+        card = getattr(self, "scan_card", None)
+        if card is None:
             return
         safe_value = max(0, min(100, int(value)))
-        self.scan_progress_container.setVisible(True)
-        self.scan_progress_bar.setValue(safe_value)
-        self.scan_progress_bar.setFormat(f"Scanning… {safe_value}%")
+        self._phase1_percent = safe_value
+        if self._scan_state != SCAN_PHASE1:
+            self._set_scan_state(SCAN_PHASE1)
+        card.ensure_visible()
+        card.set_progress_range(0, 100)
+        card.set_progress_value(safe_value)
+        self._refresh_scan_detail()
 
     def _update_scan_status(self, text: str) -> None:
-        """Update the inline scan status label."""
+        """Update the Scan Card detail message from background status updates."""
 
-        if not hasattr(self, "scan_status_label"):
-            return
-        message = text or "Scanning…"
-        self.scan_progress_container.setVisible(True)
-        self.scan_status_label.setText(message)
+        self._scan_status_message = text.strip() if text else ""
+        self._refresh_scan_detail()
 
     def _reset_scan_progress_ui(self, *, message: str = "Ready to scan") -> None:
-        """Hide and reset the scan progress widgets."""
+        """Return the Scan Card to its idle appearance."""
 
-        if not hasattr(self, "scan_progress_container"):
-            return
-        self.scan_status_label.setText(message)
-        self.scan_progress_bar.setValue(0)
-        self.scan_progress_bar.setFormat(message)
-        self.scan_progress_container.setVisible(False)
-        if hasattr(self, "btn_cancel_scan"):
-            self.btn_cancel_scan.setEnabled(False)
+        self._clear_scan_infobar()
+        self._set_scan_state(SCAN_IDLE, detail=message)
 
     def _cancel_scan(self) -> None:
         """Allow the user to cancel an in-progress scan."""
@@ -1024,12 +1626,15 @@ class MainWindow(QMainWindow):
         if not getattr(self, "_scan_active", False):
             self._reset_scan_progress_ui(message="Ready to scan")
             return
+        self._scan_cancel_requested = True
         worker = getattr(self, "worker", None)
         if worker is not None:
             worker.stop()
-        self.scan_status_label.setText("Cancelling scan…")
-        if hasattr(self, "btn_cancel_scan"):
-            self.btn_cancel_scan.setEnabled(False)
+        self._scan_status_message = "Cancelling scan…"
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.set_cancel_enabled(False)
+        self._refresh_scan_detail()
 
     def _decoration_padding(self) -> int:
         """Return the buffer needed so window chrome never hides tier columns."""
@@ -1773,31 +2378,24 @@ class MainWindow(QMainWindow):
                     item.setToolTip(tooltip)
 
     def _on_nps_progress(self, completed: int, total: int) -> None:
-        """Update the background NPS progress bar as jobs finish."""
+        """Update the Scan Card during background NPS computation."""
 
-        if not hasattr(self, "nps_progress_bar"):
-            return
         self._nps_jobs_total = max(0, total)
-        safe_total = max(0, total)
-        safe_completed = max(0, min(completed, safe_total if safe_total else completed))
-        if safe_total <= 0:
-            if hasattr(self, "nps_status_container"):
-                self.nps_status_container.setVisible(False)
-            if hasattr(self, "nps_complete_label"):
-                self.nps_complete_label.setVisible(False)
-            self.nps_progress_bar.setVisible(False)
-            self.nps_progress_bar.setRange(0, 1)
-            self.nps_progress_bar.setValue(0)
-            self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
+        self._phase2_total = max(0, total)
+        if self._phase2_total <= 0:
+            self._phase2_completed = 0
+            if self._scan_state == SCAN_PHASE2:
+                self._refresh_scan_detail()
             return
-        if hasattr(self, "nps_status_container"):
-            self.nps_status_container.setVisible(True)
-        if hasattr(self, "nps_complete_label"):
-            self.nps_complete_label.setVisible(False)
-        self.nps_progress_bar.setVisible(True)
-        self.nps_progress_bar.setRange(0, safe_total)
-        self.nps_progress_bar.setValue(safe_completed)
-        self.nps_progress_bar.setFormat(f"NPS scan: {safe_completed} / {safe_total}")
+        self._phase2_completed = max(0, min(completed, self._phase2_total))
+        if self._scan_state != SCAN_PHASE2:
+            self._set_scan_state(SCAN_PHASE2)
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.ensure_visible()
+            card.set_progress_range(0, self._phase2_total)
+            card.set_progress_value(self._phase2_completed)
+        self._refresh_scan_detail()
 
     def _on_nps_update(self, song_path: str, avg: float, peak: float) -> None:
         """Store freshly computed NPS values for a song."""
@@ -1814,44 +2412,15 @@ class MainWindow(QMainWindow):
         self._scan_active = False
         self._set_scan_controls_enabled(True)
         self._set_weight_nps_enabled(True)
-        if hasattr(self, "nps_progress_bar"):
-            if self._nps_jobs_total <= 0:
-                if hasattr(self, "nps_status_container"):
-                    self.nps_status_container.setVisible(False)
-                if hasattr(self, "nps_complete_label"):
-                    self.nps_complete_label.setVisible(False)
-                self.nps_progress_bar.setVisible(False)
-                self.nps_progress_bar.setRange(0, 1)
-                self.nps_progress_bar.setValue(0)
-                self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
-            else:
-                self.nps_progress_bar.setRange(0, self._nps_jobs_total)
-                current = self.nps_progress_bar.value()
-                if current >= self._nps_jobs_total:
-                    if hasattr(self, "nps_status_container"):
-                        self.nps_status_container.setVisible(True)
-                    self.nps_progress_bar.setValue(self._nps_jobs_total)
-                    self.nps_progress_bar.setVisible(False)
-                    if hasattr(self, "nps_complete_label"):
-                        self.nps_complete_label.setText("NPS scan complete")
-                        self.nps_complete_label.setVisible(True)
-                else:
-                    if hasattr(self, "nps_status_container"):
-                        self.nps_status_container.setVisible(True)
-                    if hasattr(self, "nps_complete_label"):
-                        self.nps_complete_label.setVisible(False)
-                    self.nps_progress_bar.setVisible(True)
-                    self.nps_progress_bar.setFormat(
-                        f"NPS scan cancelled ({current} / {self._nps_jobs_total})"
-                    )
-        ready_message = "Ready to scan"
-        if (
-            hasattr(self, "nps_progress_bar")
-            and self._nps_jobs_total > 0
-            and self.nps_progress_bar.value() < self._nps_jobs_total
-        ):
-            ready_message = "Scan cancelled"
-        self._reset_scan_progress_ui(message=ready_message)
+
+        if self._scan_cancel_requested:
+            self._clear_scan_infobar()
+            self._set_scan_state(SCAN_CANCELLED, detail="Scan cancelled.")
+            self._scan_cancel_requested = False
+        else:
+            detail = self._scan_status_message or f"Found {len(self.library)} eligible songs."
+            self._finalize_scan_completion(detail=detail)
+
         self._refresh_library_view()
         self._refresh_tier_tooltips()
 
@@ -1890,14 +2459,12 @@ class MainWindow(QMainWindow):
         if removed or not os.path.exists(cache_path):
             QMessageBox.information(self, "Cache cleared", "The songs cache was cleared successfully.")
 
-    def scan_now(self) -> None:
+    def scan_now(self, force: bool = False) -> None:
         """Start the asynchronous library scan with progress feedback."""
+
+        force_rescan = bool(force)
         if self._scan_active:
-            QMessageBox.information(
-                self,
-                "Scan in progress",
-                "Scan already in progress. Please wait for the current scan to finish.",
-            )
+            self._show_scan_infobar("Scan already in progress.", duration_ms=2800)
             return
         if not self.root_folder or not os.path.isdir(self.root_folder):
             self.root_folder = None
@@ -1906,15 +2473,40 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "No folder", "Please pick your TOP-LEVEL songs folder first.")
             return
 
+        if not force_rescan and self._cache_is_warm():
+            last_scan = self._format_last_scan_timestamp()
+            self._show_workflow_infobar(
+                f"Library is up to date. Last scan: {last_scan}.",
+                action_text="Rescan anyway",
+                action=self._start_forced_rescan,
+                duration_ms=6000,
+            )
+            return
+
+        self._clear_workflow_infobar()
+        self._clear_scan_infobar()
+
         self._scan_active = True
+        self._scan_cancel_requested = False
+        self._phase1_complete = False
+        self._phase1_percent = 0
+        self._phase2_completed = 0
+        self._phase2_total = 0
+        self._pending_warm_cache_override = False
         self._set_scan_controls_enabled(False)
-        if hasattr(self, "scan_progress_container"):
-            self.scan_progress_container.setVisible(True)
-            self.scan_status_label.setText("Preparing scan…")
-            self.scan_progress_bar.setRange(0, 100)
-            self.scan_progress_bar.setValue(0)
-            self.scan_progress_bar.setFormat("Scanning… %p%")
-            self.btn_cancel_scan.setEnabled(True)
+        self._set_weight_nps_enabled(False)
+        self._scan_status_message = "Preparing scan…"
+        self._set_scan_state(SCAN_PHASE1, detail=self._scan_status_message)
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.set_collapsed(False)
+            card.set_cancel_visible(True)
+            card.set_cancel_enabled(True)
+            card.set_hide_visible(False)
+            card.set_progress_range(0, 100)
+            card.set_progress_value(0)
+        self._scan_card_collapsed_pref = False
+        self.settings.setValue("scan_card_collapsed", False)
 
         self.thread = QThread(self)
         cache_db = get_cache_path()
@@ -1923,15 +2515,6 @@ class MainWindow(QMainWindow):
 
         self._songs_by_path = {}
         self._nps_jobs_total = 0
-        if hasattr(self, "nps_status_container"):
-            self.nps_status_container.setVisible(False)
-        if hasattr(self, "nps_complete_label"):
-            self.nps_complete_label.setVisible(False)
-        self.nps_progress_bar.setVisible(False)
-        self.nps_progress_bar.setRange(0, 1)
-        self.nps_progress_bar.setValue(0)
-        self.nps_progress_bar.setFormat("NPS scan: 0 / 0")
-        self._set_weight_nps_enabled(False)
 
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self._update_scan_progress_value)
@@ -1943,32 +2526,50 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self.thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.thread.finished.connect(self.thread.deleteLater)
-        if hasattr(self, "btn_cancel_scan"):
-            self.btn_cancel_scan.setEnabled(True)
 
         try:
             self.thread.start()
         except Exception:
             self._scan_active = False
             self._set_scan_controls_enabled(True)
-            self._reset_scan_progress_ui(message="Ready to scan")
+            self._set_weight_nps_enabled(True)
+            self._set_scan_state(SCAN_IDLE, detail="Ready to scan")
             raise
 
     def _scan_finished(self, songs: List[Song]) -> None:
         """Handle completion of the background scan and refresh the UI."""
         self.library = songs
         self._songs_by_path = {song.path: song for song in songs}
+        new_signature = self._compute_library_signature(songs)
+        self._library_changed = new_signature != self._last_scan_signature
+        self._last_scan_signature = new_signature
         self._refresh_library_view()
-        if hasattr(self, "scan_progress_container"):
-            self.scan_progress_container.setVisible(True)
-            self.scan_progress_bar.setValue(100)
-            self.scan_progress_bar.setFormat("Scan complete")
-            self.scan_status_label.setText("Scan complete")
-            self.btn_cancel_scan.setEnabled(False)
-        extra_note = ""
+
+        self._phase1_complete = True
+        self._phase1_percent = 100
+        card = getattr(self, "scan_card", None)
+        if card is not None:
+            card.ensure_visible()
+            card.set_progress_range(0, 100)
+            card.set_progress_value(100)
+
+        if self._scan_cancel_requested:
+            self._scan_status_message = "Scan cancelled before completion."
+            self._set_scan_state(SCAN_CANCELLED, detail=self._scan_status_message)
+            return
+
         if self._nps_jobs_total > 0:
-            extra_note = "\nNPS values are still being computed in the background."
-        QMessageBox.information(self, "Scan complete", f"Found {len(songs)} eligible songs.{extra_note}")
+            self._scan_status_message = "Computing chart NPS…"
+            self._set_scan_state(SCAN_PHASE2, detail=self._scan_status_message)
+            if songs:
+                self._show_scan_infobar(
+                    f"Found {len(songs)} songs. NPS is computing…",
+                    duration_ms=3500,
+                )
+        else:
+            detail = f"Found {len(songs)} eligible songs."
+            self._scan_status_message = detail
+            self._set_scan_state(SCAN_COMPLETE, detail=detail)
 
     def auto_arrange(self) -> None:
         """Generate a new set of tiers using the current configuration."""
