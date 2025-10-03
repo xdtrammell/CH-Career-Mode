@@ -843,6 +843,8 @@ class MainWindow(QMainWindow):
         self.primary_actions_layout = primary_actions
         settings_layout.addLayout(primary_actions)
 
+        self._refresh_workflow_button_minimums()
+
         self.scan_progress_container = QFrame()
         self.scan_progress_container.setObjectName("scanProgress")
         scan_layout = QVBoxLayout(self.scan_progress_container)
@@ -920,7 +922,7 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(tiers_card, 3)
         self.main_layout.addWidget(self.settings_box, 2)
 
-        self._update_size_constraints()
+        self._refresh_workflow_buttons_and_update()
         self._update_folder_status()
 
         self._scan_button_default_tooltip = (
@@ -951,7 +953,13 @@ class MainWindow(QMainWindow):
         self._apply_artist_mode_state()
         self._sync_external_tier_scrollbar()
         QTimer.singleShot(0, self._sync_all_tier_heights)
-        QTimer.singleShot(0, self._update_size_constraints)
+        QTimer.singleShot(0, self._refresh_workflow_buttons_and_update)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not getattr(self, "_workflow_minimums_refreshed_on_show", False):
+            self._workflow_minimums_refreshed_on_show = True
+            self._refresh_workflow_buttons_and_update()
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -1097,6 +1105,25 @@ class MainWindow(QMainWindow):
         if internal.value() != value:
             internal.setValue(value)
 
+    def _refresh_workflow_button_minimums(self) -> None:
+        """Ensure workflow buttons expose up-to-date minimum widths."""
+
+        for attr in ("btn_scan", "btn_auto", "btn_export"):
+            button = getattr(self, attr, None)
+            if button is None:
+                continue
+            hint_width = button.sizeHint().width()
+            if hint_width <= 0:
+                continue
+            if hint_width > button.minimumWidth():
+                button.setMinimumWidth(hint_width)
+
+    def _refresh_workflow_buttons_and_update(self) -> None:
+        """Refresh workflow button minimums and immediately enforce constraints."""
+
+        self._refresh_workflow_button_minimums()
+        self._update_size_constraints()
+
     def _workflow_actions_minimum_width(self) -> int:
         """Return the minimum width required to keep workflow buttons on one row."""
 
@@ -1105,9 +1132,8 @@ class MainWindow(QMainWindow):
             button = getattr(self, attr, None)
             if button is None:
                 continue
-            width = button.minimumWidth()
-            if width <= 0:
-                width = button.sizeHint().width()
+            hint_width = button.sizeHint().width()
+            width = max(button.minimumWidth(), hint_width)
             buttons.append(width)
         spacing_total = 0
         actions_margins = 0
@@ -1121,7 +1147,8 @@ class MainWindow(QMainWindow):
         if layout is not None:
             margins: QMargins = layout.contentsMargins()
             settings_margins = margins.left() + margins.right()
-        return sum(buttons) + spacing_total + actions_margins + settings_margins
+        buffer = 6 if buttons else 0
+        return sum(buttons) + spacing_total + actions_margins + settings_margins + buffer
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""

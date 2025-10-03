@@ -21,6 +21,26 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
+# Session 18 — 2025-10-03 14:10
+
+## Topic
+Second follow-up to guarantee Workflow buttons report final size hints before the window minimum is enforced.
+
+## User Desires
+The user observed that the Workflow actions still appeared truncated on first launch and wanted the app to remeasure button widths after Qt finished applying fonts and DPI scaling.
+
+## Specifics of User Desires
+They requested a helper that refreshes the three action buttons’ minimum widths using up-to-date size hints, to call that helper after building the Workflow panel, again via a zero-delay timer, and once more on the first show before recalculating the global size constraints. They also wanted the width computation to consider live size hints and include a small safety buffer.
+
+## Actions Taken
+- Added `gui.py — MainWindow._refresh_workflow_button_minimums` and `MainWindow._refresh_workflow_buttons_and_update` to recalculate button minimums and immediately reapply size constraints when needed.
+- Updated `gui.py — MainWindow.__init__` to invoke the refresh helper after assembling the Workflow layout, reuse it when enforcing constraints, and schedule another pass with `QTimer.singleShot(0, ...)`.
+- Overrode `gui.py — MainWindow.showEvent` to trigger one final refresh/update pair on the first paint, and expanded `_workflow_actions_minimum_width` to use live size hints with an extra padding buffer.
+
+## Helpful Hints
+If future DPI or theme toggles happen dynamically, call `_refresh_workflow_buttons_and_update` so the Workflow panel can expand before Qt tries to compress the button labels.
+
+---
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
