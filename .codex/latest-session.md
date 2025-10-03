@@ -21,9 +21,6 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
-
----
-
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
@@ -387,4 +384,23 @@ They requested enforcing minimum widths based on the buttons’ size hints, maki
 
 ## Helpful Hints
 If additional controls are added to the Workflow row, update `_workflow_actions_minimum_width` so the spacing and margin calculation still reflects the full set of buttons.
+---
+# Session 17 — 2025-10-03 12:30
+
+## Topic
+Follow-up layout adjustments to ensure Workflow buttons drive the initial window sizing.
+
+## User Desires
+The user wanted the main window to calculate its minimum width only after the Workflow buttons are realized so their labels never start truncated.
+
+## Specifics of User Desires
+They asked to delay the initial resizing until after the full layout is assembled, have the main layout respect child minimums, include Workflow layout margins in the measurement helper, and trigger one more constraint update once Qt finalizes style metrics.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to defer initial sizing, add a size constraint on the main layout, and schedule another `_update_size_constraints` invocation via `QTimer.singleShot`.
+- Expanded `gui.py — MainWindow._workflow_actions_minimum_width` to add the Workflow row’s own margins into the total width calculation used by `_update_size_constraints`.
+
+## Helpful Hints
+Whenever new controls are added beside the Workflow buttons, recheck `_workflow_actions_minimum_width` so the margin and spacing math still yields the correct minimum width for the settings column.
+
 ---

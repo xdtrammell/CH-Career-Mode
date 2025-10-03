@@ -508,9 +508,6 @@ class MainWindow(QMainWindow):
         """Bootstrap widgets, restore persisted settings, and prep defaults."""
         super().__init__()
         self.setWindowTitle("Clone Hero Career Builder")
-        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        safe_width = WINDOW_MIN_WIDTH + self._decoration_padding()
-        self.resize(safe_width, WINDOW_MIN_HEIGHT)
         self.setStyleSheet(
             APP_STYLE_TEMPLATE.format(
                 accent=ACCENT_COLOR,
@@ -735,9 +732,6 @@ class MainWindow(QMainWindow):
 
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
-        self._update_size_constraints()
-        if self.width() < WINDOW_MIN_WIDTH:
-            self.resize(WINDOW_MIN_WIDTH + self._decoration_padding(), self.height())
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -746,6 +740,7 @@ class MainWindow(QMainWindow):
             MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN, MAIN_LAYOUT_MARGIN
         )
         self.main_layout.setSpacing(MAIN_LAYOUT_SPACING)
+        self.main_layout.setSizeConstraint(QLayout.SetMinimumSize)
 
         library_card = QFrame()
         library_card.setObjectName("panelCard")
@@ -925,8 +920,8 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(tiers_card, 3)
         self.main_layout.addWidget(self.settings_box, 2)
 
-        self._update_folder_status()
         self._update_size_constraints()
+        self._update_folder_status()
 
         self._scan_button_default_tooltip = (
             self.btn_scan.toolTip() or "Scan your library recursively for eligible songs."
@@ -956,6 +951,7 @@ class MainWindow(QMainWindow):
         self._apply_artist_mode_state()
         self._sync_external_tier_scrollbar()
         QTimer.singleShot(0, self._sync_all_tier_heights)
+        QTimer.singleShot(0, self._update_size_constraints)
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -1114,15 +1110,18 @@ class MainWindow(QMainWindow):
                 width = button.sizeHint().width()
             buttons.append(width)
         spacing_total = 0
+        actions_margins = 0
         if hasattr(self, "primary_actions_layout") and buttons:
             spacing = self.primary_actions_layout.spacing()
             spacing_total = spacing * max(0, len(buttons) - 1)
-        margin_total = 0
+            primary_margins: QMargins = self.primary_actions_layout.contentsMargins()
+            actions_margins = primary_margins.left() + primary_margins.right()
+        settings_margins = 0
         layout = getattr(self, "settings_layout", None)
         if layout is not None:
             margins: QMargins = layout.contentsMargins()
-            margin_total = margins.left() + margins.right()
-        return sum(buttons) + spacing_total + margin_total
+            settings_margins = margins.left() + margins.right()
+        return sum(buttons) + spacing_total + actions_margins + settings_margins
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
