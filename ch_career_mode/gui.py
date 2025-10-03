@@ -346,27 +346,28 @@ QLabel#infoBarText {{
     color: rgba(244, 246, 251, 0.9);
 }}
 QToolButton#infoBarAction {{
-    border: none;
-    background: transparent;
-    background-color: transparent;
     color: {accent};
     font-weight: 600;
     padding: 4px 8px;
 }}
-QToolButton#infoBarAction:hover {{
+QToolButton#infoBarAction,
+QToolButton#infoBarAction:hover,
+QToolButton#infoBarAction:pressed,
+QToolButton#infoBarAction:checked,
+QToolButton#infoBarAction:focus {{
+    border: none;
     background: transparent;
     background-color: transparent;
+}}
+QToolButton#infoBarAction:hover {{
     color: {accent};
     text-decoration: underline;
 }}
 QToolButton#infoBarAction:pressed {{
-    background: transparent;
-    background-color: transparent;
     color: {accent_hover};
 }}
 QToolButton#infoBarAction:focus {{
-    background: transparent;
-    background-color: transparent;
+    color: {accent};
 }}
 
 QScrollArea {{
@@ -492,8 +493,37 @@ class InfoBar(QFrame):
             btn.setObjectName("infoBarAction")
             btn.setText(action_text)
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setAutoRaise(True)
+            btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
+            btn.setAutoRaise(False)
             btn.setFocusPolicy(Qt.NoFocus)
+            btn.setStyleSheet(
+                (
+                    "QToolButton {\n"
+                    "    background: transparent;\n"
+                    "    background-color: transparent;\n"
+                    "    border: none;\n"
+                    f"    color: {ACCENT_COLOR};\n"
+                    "    font-weight: 600;\n"
+                    "    padding: 4px 8px;\n"
+                    "}\n"
+                    "QToolButton:hover {\n"
+                    "    background: transparent;\n"
+                    "    background-color: transparent;\n"
+                    f"    color: {ACCENT_COLOR};\n"
+                    "    text-decoration: underline;\n"
+                    "}\n"
+                    "QToolButton:pressed {\n"
+                    "    background: transparent;\n"
+                    "    background-color: transparent;\n"
+                    f"    color: {ACCENT_COLOR_HOVER};\n"
+                    "}\n"
+                    "QToolButton:focus {\n"
+                    "    background: transparent;\n"
+                    "    background-color: transparent;\n"
+                    f"    color: {ACCENT_COLOR};\n"
+                    "}"
+                )
+            )
             btn.clicked.connect(self._on_action_clicked)
             layout.addWidget(btn)
             self._action_button = btn

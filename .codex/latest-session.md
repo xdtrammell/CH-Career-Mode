@@ -530,3 +530,22 @@ They specifically wanted the Rescan action to behave like a text link across hov
 Whenever tweaking ScanCard styles, remember that its focus treatment now blends stylesheet border updates with a runtime shadow color shift, so changes should keep both pieces in sync for consistency.
 
 ---
+# Session 21 — 2025-10-03 21:15
+
+## Topic
+Eliminate the native hover panel from the InfoBar action button after Session 20 feedback.
+
+## User Desires
+The user reported that the “Rescan anyway” control still showed a dark hover background and wanted the hover to remain link-like without native styling artifacts.
+
+## Specifics of User Desires
+They requested disabling the auto-raised hover treatment on the InfoBar action tool button, adding a widget-local stylesheet to guarantee transparency across states, and broadening the global QSS selector to cover all pseudo-states.
+
+## Actions Taken
+- Updated `gui.py — InfoBar.__init__` to disable auto-raise on the action tool button, apply `Qt.ToolButtonTextOnly`, and attach an inline stylesheet that enforces transparent backgrounds and accent colors for normal, hover, pressed, and focus states.
+- Expanded `gui.py — APP_STYLE_TEMPLATE` rules for `QToolButton#infoBarAction` to include all pseudo-states so platform styles cannot introduce a background while keeping hover underline and pressed color tweaks.
+
+## Helpful Hints
+When debugging stubborn hover fills on Qt tool buttons, check for `setAutoRaise(True)` because it forces the style engine to paint `PE_PanelButtonTool`, which can ignore QSS transparency directives on some platforms.
+
+---
