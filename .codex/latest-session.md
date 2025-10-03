@@ -286,3 +286,25 @@ Make the tier builder scrollbar feel external to the third column and keep it sl
 - Update `TIER_SCROLL_GUTTER_WIDTH` if future visual tweaks require a wider or narrower gutter between the tier builder and workflow panels.
 - The spacer widget keeps the gutter padding consistent; replace it with a styled frame if a visible divider is desired later.
 ---
+# Session 12 — 2025-10-02 12:45
+
+## Topic
+External tier scrollbar gutter integration.
+
+## User Desires
+Ensure the tier builder's third column stays visible while relocating the vertical scrollbar into an external gutter that mirrors the scroll area's movement.
+
+## Specifics of User Desires
+- Reserve dedicated gutter and scrollbar widths in the tier panel sizing math so all three tier columns fit at launch.
+- Replace the scroll area's built-in vertical bar with an external one that stays hidden until scrolling is necessary and adopts the Fluent styling.
+- Keep the external bar synchronised with the internal scroll area after tier rebuilds, height changes, and window resizing.
+
+## Actions Taken
+- Added gutter and external scrollbar width constants, updated minimum width calculations, and wrapped the tier scroll area with a spacer plus a dedicated `QScrollBar` widget.
+- Hid the internal vertical scrollbar, styled the external bar, and bridged their signals with helper methods that mirror range, value, and visibility.
+- Hooked the new synchronisation routine into size constraint updates and tier height refreshes to keep the gutter bar accurate as content changes.
+
+## Helpful Hints
+- `_sync_external_tier_scrollbar()` centralises all mirroring logic; call it after any manual scrollbar adjustments to keep the gutter bar consistent.
+- Adjust `EXTERNAL_VBAR_WIDTH` and `TIER_SCROLL_GUTTER_WIDTH` together if the gutter's visual weight changes in future design tweaks.
+---

@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QToolBox,
     QToolButton,
+    QScrollBar,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -80,6 +81,7 @@ SETTINGS_MIN_WIDTH = 280
 TIER_COLUMN_MIN_WIDTH = 240
 TIER_LIST_EXTRA_PADDING = 8
 TIER_SCROLL_GUTTER_WIDTH = 12
+EXTERNAL_VBAR_WIDTH = 12
 CARD_CONTENT_MARGIN = 18
 CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
@@ -90,6 +92,7 @@ TIERS_PANEL_MIN_WIDTH = (
     + CARD_CONTENT_PADDING
     + 2 * TIER_GRID_LAYOUT_MARGIN
     + TIER_SCROLL_GUTTER_WIDTH
+    + EXTERNAL_VBAR_WIDTH
 )
 WINDOW_MIN_WIDTH = (
     LIBRARY_PANEL_MIN_WIDTH
@@ -675,18 +678,55 @@ class MainWindow(QMainWindow):
         self.tiers_scroll.setObjectName("tiersScroll")
         self.tiers_scroll.setWidgetResizable(True)
         self.tiers_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.tiers_scroll.setWidget(self.tiers_container)
 
-        tiers_scroll_row = QHBoxLayout()
-        tiers_scroll_row.setContentsMargins(0, 0, 0, 0)
-        tiers_scroll_row.setSpacing(0)
-        tiers_scroll_row.addWidget(self.tiers_scroll, 1)
+        self.tiers_vbar = QScrollBar(Qt.Vertical)
+        self.tiers_vbar.setObjectName("tiersExternalScrollBar")
+        self.tiers_vbar.setFixedWidth(EXTERNAL_VBAR_WIDTH)
+        self.tiers_vbar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.tiers_vbar.setFocusPolicy(Qt.NoFocus)
+        self.tiers_vbar.hide()
+        self.tiers_vbar.setStyleSheet(
+            (
+                f"QScrollBar:vertical {{\n"
+                f"    background: transparent;\n"
+                f"    width: {EXTERNAL_VBAR_WIDTH}px;\n"
+                f"    margin: 0;\n"
+                f"    border: none;\n"
+                f"}}\n"
+                f"QScrollBar::handle:vertical {{\n"
+                f"    background-color: rgba(255, 255, 255, 0.28);\n"
+                f"    border-radius: {EXTERNAL_VBAR_WIDTH // 2}px;\n"
+                f"    min-height: 36px;\n"
+                f"}}\n"
+                f"QScrollBar::handle:vertical:hover {{\n"
+                f"    background-color: {ACCENT_COLOR};\n"
+                f"}}\n"
+                "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {\n"
+                "    background: transparent;\n"
+                "    height: 0px;\n"
+                "}\n"
+                "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {\n"
+                "    background: transparent;\n"
+                "}\n"
+            )
+        )
 
         tiers_scroll_gutter = QWidget()
         tiers_scroll_gutter.setFixedWidth(TIER_SCROLL_GUTTER_WIDTH)
         tiers_scroll_gutter.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-        tiers_scroll_row.addWidget(tiers_scroll_gutter)
+
+        tiers_wrap_layout = QHBoxLayout()
+        tiers_wrap_layout.setContentsMargins(0, 0, 0, 0)
+        tiers_wrap_layout.setSpacing(0)
+        tiers_wrap_layout.addWidget(self.tiers_scroll, 1)
+        tiers_wrap_layout.addWidget(tiers_scroll_gutter)
+        tiers_wrap_layout.addWidget(self.tiers_vbar)
+
+        self.tiers_wrap = QWidget()
+        self.tiers_wrap.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.tiers_wrap.setLayout(tiers_wrap_layout)
 
         self._regenerate_tier_names(procedural_refresh=True)
         self._rebuild_tier_widgets()
@@ -759,7 +799,7 @@ class MainWindow(QMainWindow):
         tiers_title = QLabel("Tier Builder")
         tiers_title.setObjectName("sectionTitle")
         tiers_card_layout.addWidget(tiers_title)
-        tiers_card_layout.addLayout(tiers_scroll_row, 1)
+        tiers_card_layout.addWidget(self.tiers_wrap, 1)
 
         self.settings_box = QFrame()
         self.settings_box.setObjectName("panelCard")
@@ -904,7 +944,9 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
         self.spin_min_diff.valueChanged.connect(self._on_min_difficulty_changed)
 
+        self._connect_tier_scrollbars()
         self._apply_artist_mode_state()
+        self._sync_external_tier_scrollbar()
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
@@ -989,6 +1031,67 @@ class MainWindow(QMainWindow):
         decoration_padding = max(0, frame_width - geo_width)
         return max(40, decoration_padding)
 
+    def _connect_tier_scrollbars(self) -> None:
+        """Bridge the hidden tier scroll area with the external gutter scrollbar."""
+
+        if not hasattr(self, "tiers_scroll") or not hasattr(self, "tiers_vbar"):
+            return
+        if getattr(self, "_tier_scrollbars_connected", False):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        external = self.tiers_vbar
+        if internal is None or external is None:
+            return
+
+        external.valueChanged.connect(self._on_external_tier_scroll)
+        internal.valueChanged.connect(self._on_internal_tier_scroll)
+        internal.rangeChanged.connect(lambda *_: self._sync_external_tier_scrollbar())
+        internal.actionTriggered.connect(lambda *_: self._sync_external_tier_scrollbar())
+        self._tier_scrollbars_connected = True
+        self._sync_external_tier_scrollbar()
+
+    def _sync_external_tier_scrollbar(self) -> None:
+        """Mirror the internal vertical scrollbar onto the external gutter bar."""
+
+        if not hasattr(self, "tiers_scroll") or not hasattr(self, "tiers_vbar"):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        external = self.tiers_vbar
+        if internal is None or external is None:
+            return
+
+        needs_scroll = internal.maximum() > internal.minimum()
+        external.blockSignals(True)
+        external.setRange(internal.minimum(), internal.maximum())
+        external.setPageStep(max(1, internal.pageStep()))
+        external.setSingleStep(max(1, internal.singleStep()))
+        external.setValue(internal.value())
+        external.setVisible(needs_scroll)
+        external.setEnabled(needs_scroll)
+        external.blockSignals(False)
+        if not needs_scroll:
+            internal.setValue(0)
+
+    def _on_internal_tier_scroll(self, value: int) -> None:
+        """Update the external scrollbar when the internal one moves."""
+
+        if not hasattr(self, "tiers_vbar"):
+            return
+        external = self.tiers_vbar
+        if external.value() != value:
+            external.setValue(value)
+
+    def _on_external_tier_scroll(self, value: int) -> None:
+        """Update the hidden scroll area when the external bar moves."""
+
+        if not hasattr(self, "tiers_scroll"):
+            return
+        internal = self.tiers_scroll.verticalScrollBar()
+        if internal is None:
+            return
+        if internal.value() != value:
+            internal.setValue(value)
+
 
     def _update_size_constraints(self) -> None:
         """Enforce minimum widget sizes so the layout remains usable."""
@@ -1004,6 +1107,11 @@ class MainWindow(QMainWindow):
                 TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH + (TIER_COLUMNS - 1) * TIER_COLUMN_SPACING
             )
             self.tiers_scroll.setMinimumWidth(tiers_content_min_width)
+            if hasattr(self, 'tiers_wrap'):
+                tiers_wrap_min_width = (
+                    tiers_content_min_width + TIER_SCROLL_GUTTER_WIDTH + EXTERNAL_VBAR_WIDTH
+                )
+                self.tiers_wrap.setMinimumWidth(tiers_wrap_min_width)
         if hasattr(self, 'tiers_card'):
             self.tiers_card.setMinimumWidth(TIERS_PANEL_MIN_WIDTH)
         if width_before_adjust < WINDOW_MIN_WIDTH:
@@ -1019,6 +1127,7 @@ class MainWindow(QMainWindow):
             allow_horizontal_scroll = width_before_adjust < WINDOW_MIN_WIDTH
             policy = Qt.ScrollBarAsNeeded if allow_horizontal_scroll else Qt.ScrollBarAlwaysOff
             self.tiers_scroll.setHorizontalScrollBarPolicy(policy)
+        self._sync_external_tier_scrollbar()
 
     def _is_procedural_theme(self) -> bool:
         """Return True when the active theme should auto-generate tier names."""
@@ -1280,6 +1389,7 @@ class MainWindow(QMainWindow):
 
         tier.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         tier.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        tier.setViewportMargins(0, 0, 6, 0)
         body_layout.addWidget(tier)
         layout.addWidget(body)
 
@@ -1347,7 +1457,7 @@ class MainWindow(QMainWindow):
             content_height = self.tiers_container.sizeHint().height()
             if viewport_height > 0 and content_height <= viewport_height:
                 self.tiers_scroll.verticalScrollBar().setValue(0)
-            self.tiers_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self._sync_external_tier_scrollbar()
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
         """Remove a song from a tier and return it to the library pane."""
