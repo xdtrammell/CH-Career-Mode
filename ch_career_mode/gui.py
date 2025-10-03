@@ -238,7 +238,6 @@ QPushButton[class~="accent"] {{
     border-color: rgba(94, 129, 255, 0.6);
     color: #0a0c12;
     font-weight: 600;
-    box-shadow: 0 12px 24px rgba(94, 129, 255, 0.25);
 }}
 QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
@@ -911,12 +910,8 @@ class MainWindow(QMainWindow):
         settings_layout.addStretch(1)
         settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
 
-        for card in (library_card, tiers_card, self.settings_box):
-            effect = QGraphicsDropShadowEffect(card)
-            effect.setBlurRadius(30)
-            effect.setOffset(0, 12)
-            effect.setColor(QColor(0, 0, 0, 120))
-            card.setGraphicsEffect(effect)
+        self._apply_shadow(library_card, blur=16, y=1, alpha=80)
+        self._apply_shadow(self.settings_box, blur=16, y=1, alpha=80)
 
         self.main_layout.addWidget(library_card, 2)
         self.main_layout.addWidget(tiers_card, 3)
@@ -1104,6 +1099,25 @@ class MainWindow(QMainWindow):
             return
         if internal.value() != value:
             internal.setValue(value)
+
+    def _apply_shadow(
+        self,
+        widget: Optional[QWidget],
+        *,
+        blur: int = 20,
+        x: int = 0,
+        y: int = 2,
+        alpha: int = 110,
+    ) -> None:
+        """Attach a drop shadow effect to *widget* with the provided styling."""
+
+        if widget is None:
+            return
+        effect = QGraphicsDropShadowEffect(widget)
+        effect.setBlurRadius(max(0, blur))
+        effect.setOffset(x, y)
+        effect.setColor(QColor(0, 0, 0, max(0, min(255, alpha))))
+        widget.setGraphicsEffect(effect)
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
@@ -1408,11 +1422,7 @@ class MainWindow(QMainWindow):
         panel.setMinimumWidth(TIER_COLUMN_MIN_WIDTH)
         panel.setStyleSheet(TIER_CARD_STYLE)
 
-        shadow = QGraphicsDropShadowEffect(panel)
-        shadow.setBlurRadius(18)
-        shadow.setOffset(0, 6)
-        shadow.setColor(QColor(0, 0, 0, 110))
-        panel.setGraphicsEffect(shadow)
+        self._apply_shadow(panel, blur=20, y=2, alpha=100)
 
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 12)

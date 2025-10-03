@@ -424,3 +424,23 @@ They asked to delay the initial resizing until after the full layout is assemble
 Whenever new controls are added beside the Workflow buttons, recheck `_workflow_actions_minimum_width` so the margin and spacing math still yields the correct minimum width for the settings column.
 
 ---
+# Session 19 — 2025-10-03 15:45
+
+## Topic
+Replace unsupported stylesheet shadows with QGraphics effects on key panels.
+
+## User Desires
+The user wanted the console spam about unknown `box-shadow` properties eliminated while keeping subtle elevation cues on the primary cards.
+
+## Specifics of User Desires
+They asked to delete every `box-shadow` declaration from the stylesheet, introduce a helper that applies `QGraphicsDropShadowEffect`, and use it only on the library card, workflow card, and each tier panel with tuned blur, offset, and alpha values.
+
+## Actions Taken
+- Removed the `box-shadow` rule from `gui.py — APP_STYLE_TEMPLATE` so Qt stops warning about unsupported stylesheet properties.
+- Added `gui.py — MainWindow._apply_shadow` to centralise drop-shadow configuration and reused it for the library and workflow panels in the constructor.
+- Updated `gui.py — MainWindow._create_tier_panel` to attach the reusable shadow effect to each tier card instead of constructing ad-hoc effects.
+
+## Helpful Hints
+Adjust the `_apply_shadow` parameters per widget to fine-tune elevation; keeping the helper ensures future tweaks avoid duplicating effect setup.
+
+---
