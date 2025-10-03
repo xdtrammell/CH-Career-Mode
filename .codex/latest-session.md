@@ -21,6 +21,25 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
+# Session 21 — 2025-10-04 00:44
+
+## Topic
+Address lingering InfoBar hover styling issues reported after Session 20.
+
+## User Desires
+The user observed the "Rescan anyway" link still showed a dark hover fill and wanted it to look like a proper text link.
+
+## Specifics of User Desires
+They expected the InfoBar action to keep a transparent background in every state while remaining responsive and readable, without resurrecting unsupported stylesheet warnings.
+
+## Actions Taken
+- Added explicit `background-color: transparent` declarations to all InfoBar action rules in `gui.py — APP_STYLE_TEMPLATE` so Qt never paints the native hover panel.
+- Enabled `gui.py — InfoBar` to call `QToolButton.setAutoRaise(True)` on the action button, ensuring the widget always renders as a flat link-style control.
+
+## Helpful Hints
+Combining the transparent stylesheet overrides with `setAutoRaise(True)` guarantees the tool button behaves like inline text while still responding to pointer events.
+
+---
 
 # Session 20 — 2025-10-05 09:45
 

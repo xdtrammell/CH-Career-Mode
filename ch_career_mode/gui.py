@@ -348,21 +348,25 @@ QLabel#infoBarText {{
 QToolButton#infoBarAction {{
     border: none;
     background: transparent;
+    background-color: transparent;
     color: {accent};
     font-weight: 600;
     padding: 4px 8px;
 }}
 QToolButton#infoBarAction:hover {{
     background: transparent;
+    background-color: transparent;
     color: {accent};
     text-decoration: underline;
 }}
 QToolButton#infoBarAction:pressed {{
     background: transparent;
+    background-color: transparent;
     color: {accent_hover};
 }}
 QToolButton#infoBarAction:focus {{
     background: transparent;
+    background-color: transparent;
 }}
 
 QScrollArea {{
@@ -488,6 +492,7 @@ class InfoBar(QFrame):
             btn.setObjectName("infoBarAction")
             btn.setText(action_text)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setAutoRaise(True)
             btn.setFocusPolicy(Qt.NoFocus)
             btn.clicked.connect(self._on_action_clicked)
             layout.addWidget(btn)
