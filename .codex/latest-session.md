@@ -264,3 +264,25 @@ Stop the Tier Builder panel from showing a vertical scrollbar by default and sty
 - If tier card padding or row heights change, revisit `_sync_all_tier_heights()` so the viewport comparison remains accurate.
 - The Fluent scrollbar styling is scoped to `tiersScroll`; reuse this object name for future tier scroll replacements to inherit the same aesthetic.
 ---
+# Session 11 — 2025-10-02 11:15
+
+## Topic
+Reposition tier builder scrollbar gutter spacing.
+
+## User Desires
+Make the tier builder scrollbar feel external to the third column and keep it slim and modern.
+
+## Specifics of User Desires
+- Wrap the tier builder scroll area in a horizontal layout with a fixed-width spacer so the vertical scrollbar sits in the gutter between Tier Builder and Workflow panels.
+- Ensure the scrollbar continues using the modern styling and `ScrollBarAsNeeded` policy, preserving functionality and appearance.
+- Account for the new gutter width in the tier panel minimum size calculation so columns remain fully visible.
+
+## Actions Taken
+- Added a gutter width constant, integrated it into the tier panel minimum width math, and reused it when configuring the tier grid layout margins.
+- Wrapped the tier scroll area in a zero-spacing horizontal layout with a fixed-width spacer to shift the scrollbar outside the third column.
+- Simplified the scrollbar policy handling to rely on `ScrollBarAsNeeded` while retaining the existing height synchronisation reset.
+
+## Helpful Hints
+- Update `TIER_SCROLL_GUTTER_WIDTH` if future visual tweaks require a wider or narrower gutter between the tier builder and workflow panels.
+- The spacer widget keeps the gutter padding consistent; replace it with a styled frame if a visible divider is desired later.
+---
