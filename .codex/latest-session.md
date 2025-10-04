@@ -23,6 +23,31 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 ---
 ---
 
+# Session 20 — 2025-10-04 16:45
+
+## Topic
+Unify the scan workflow into a persistent Scan Card with inline messaging.
+
+## User Desires
+The user wanted to replace the dual progress bars and blocking dialog with a single workflow card that tracks both scan phases, keeps status text in place, and uses a non-blocking inline notice.
+
+## Specifics of User Desires
+They asked for scan state tracking across idle/phase1/phase2/complete/cancel/error, a rounded card with phase/detail labels, a shared progress bar, cancel and hide actions, persistence of the collapsed state, keyboard-friendly focus handling, and an inline InfoBar moment instead of the phase-1 QMessageBox.
+
+## Actions Taken
+- Added `gui.py — InfoBar` and `ScanCard` to style the unified scan widget with notice support, progress bar, and inline actions.
+- Introduced scan state constants plus `MainWindow._set_scan_state`, `_set_scan_card_collapsed`, and `_on_scan_card_hidden` to manage visibility, persistence, and button availability across workflow phases.
+- Reworked `MainWindow.scan_now`, `_update_scan_progress_value`, `_on_nps_progress`, `_on_nps_done`, and `_scan_finished` to drive the Scan Card, reuse one progress bar for both phases, emit inline notices, and drop the blocking completion message box.
+- Hooked keyboard shortcuts by overriding `MainWindow.keyPressEvent` and `ScanCard.keyPressEvent` so Escape focuses Cancel during scans and Enter/Space toggles Hide when finished.
+
+## Helpful Hints
+- Call `_set_scan_state` when introducing new scan transitions so the card updates button visibility and collapse persistence automatically.
+- Use `scan_card.show_notice()` for short-lived inline status moments—`clear_notice()` resets it when switching phases.
+- The scan card collapse preference is stored under `scan_card_collapsed`; hide actions persist the flag until the next explicit scan.
+
+---
+---
+
 # Session 2 — 2025-10-03 14:10
 
 ## Topic
