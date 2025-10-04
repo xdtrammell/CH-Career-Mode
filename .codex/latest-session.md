@@ -549,3 +549,23 @@ They requested disabling the auto-raised hover treatment on the InfoBar action t
 When debugging stubborn hover fills on Qt tool buttons, check for `setAutoRaise(True)` because it forces the style engine to paint `PE_PanelButtonTool`, which can ignore QSS transparency directives on some platforms.
 
 ---
+# Session 22 — 2025-10-03 21:55
+
+## Topic
+Refine the InfoBar action implementation to remove native hover artifacts highlighted after Session 21.
+
+## User Desires
+The user wanted the “Rescan anyway” control to render as a link without a dark hover rectangle or ghosting during fade animations, while keeping the inline notification styling consistent.
+
+## Specifics of User Desires
+They asked to replace the tool button with a hyperlink-style label hooked to the same callback, ensure the InfoBar fades over a translucent surface to avoid black trails, and update styles so the new control stays transparent and accent-colored across states.
+
+## Actions Taken
+- Replaced the tool button in `gui.py — InfoBar` with a new `LinkLabel` helper that manages hover and pressed states via font tweaks and accent colors before wiring its activation signal to the InfoBar action callback.
+- Enabled `Qt.WA_TranslucentBackground` and disabled auto-fill on `gui.py — InfoBar` so the opacity effect blends over content cleanly, and limited the fade effect to the container.
+- Updated `gui.py — APP_STYLE_TEMPLATE` to swap the `infoBarAction` styling from a tool button selector to the new label, ensuring link-like hover feedback without unsupported properties.
+
+## Helpful Hints
+When adding future InfoBar actions, reuse the `LinkLabel` helper so hover styling stays consistent; if additional emphasis is needed, adjust the accent colors in the helper rather than reintroducing button widgets that might trigger native hover chrome.
+
+---
