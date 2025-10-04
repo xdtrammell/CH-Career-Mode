@@ -20,7 +20,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QEasingCurve,
 )
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -345,17 +345,6 @@ QLabel#infoBarIcon {{
 QLabel#infoBarText {{
     color: rgba(244, 246, 251, 0.9);
 }}
-QLabel#infoBarAction {{
-    color: {accent};
-    font-weight: 600;
-    padding: 4px 8px;
-    background: transparent;
-    background-color: transparent;
-}}
-QLabel#infoBarAction:hover {{
-    text-decoration: underline;
-}}
-
 QScrollArea {{
     background: transparent;
     border: none;
@@ -435,67 +424,6 @@ CACHE_WARM_THRESHOLD_SECONDS = 5 * 60
 
 
 
-class LinkLabel(QLabel):
-    """Label that mimics a hyperlink without native hover chrome."""
-
-    activated = Signal()
-
-    def __init__(self, text: str, parent: Optional[QWidget] = None) -> None:
-        super().__init__(text, parent)
-        self.setObjectName("infoBarAction")
-        self.setCursor(Qt.PointingHandCursor)
-        self.setFocusPolicy(Qt.NoFocus)
-        font = QFont(self.font())
-        font.setWeight(QFont.DemiBold)
-        self._base_font = font
-        self._hover_font = QFont(self._base_font)
-        self._hover_font.setUnderline(True)
-        self.setFont(self._base_font)
-        self._apply_state("normal")
-
-    def enterEvent(self, event) -> None:  # type: ignore[override]
-        self._apply_state("hover")
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:  # type: ignore[override]
-        self._apply_state("normal")
-        super().leaveEvent(event)
-
-    def mousePressEvent(self, event) -> None:  # type: ignore[override]
-        if event.button() == Qt.LeftButton:
-            self._apply_state("pressed")
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event) -> None:  # type: ignore[override]
-        if event.button() == Qt.LeftButton:
-            pos = event.position() if hasattr(event, "position") else event.pos()
-            point = pos.toPoint() if hasattr(pos, "toPoint") else pos
-            if self.rect().contains(point):
-                self.activated.emit()
-            self._apply_state("hover" if self.underMouse() else "normal")
-        super().mouseReleaseEvent(event)
-
-
-    def _apply_state(self, state: str) -> None:
-        if state == "hover":
-            self.setFont(self._hover_font)
-            color = ACCENT_COLOR
-        elif state == "pressed":
-            self.setFont(self._hover_font)
-            color = ACCENT_COLOR_HOVER
-        else:
-            self.setFont(self._base_font)
-            color = ACCENT_COLOR
-        self.setStyleSheet(
-            "QLabel#infoBarAction {\n"
-            "    background: transparent;\n"
-            "    background-color: transparent;\n"
-            f"    color: {color};\n"
-            "    padding: 4px 8px;\n"
-            "}"
-        )
-
-
 class InfoBar(QFrame):
     """Lightweight inline notification with optional action and fade animations."""
 
@@ -537,14 +465,17 @@ class InfoBar(QFrame):
 
         layout.addStretch(1)
 
-        self._action_label: Optional[LinkLabel]
+        self._action_button: Optional[QPushButton]
         if action_text and action is not None:
-            link = LinkLabel(action_text, self)
-            link.activated.connect(self._on_action_triggered)
-            layout.addWidget(link)
-            self._action_label = link
+            button = QPushButton(action_text, self)
+            button.setProperty("class", "accent")
+            button.setCursor(Qt.PointingHandCursor)
+            button.setFocusPolicy(Qt.NoFocus)
+            button.clicked.connect(self._on_action_triggered)
+            layout.addWidget(button)
+            self._action_button = button
         else:
-            self._action_label = None
+            self._action_button = None
 
         self._effect = QGraphicsOpacityEffect(self)
         self._effect.setOpacity(0.0)

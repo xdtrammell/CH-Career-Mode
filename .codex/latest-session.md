@@ -569,3 +569,23 @@ They asked to replace the tool button with a hyperlink-style label hooked to the
 When adding future InfoBar actions, reuse the `LinkLabel` helper so hover styling stays consistent; if additional emphasis is needed, adjust the accent colors in the helper rather than reintroducing button widgets that might trigger native hover chrome.
 
 ---
+# Session 23 — 2025-10-03 22:30
+
+## Topic
+Restore the InfoBar action to a styled accent button following feedback on the hyperlink experiment from Session 22.
+
+## User Desires
+The user wanted the inline “Rescan anyway” control to match other accent buttons without hover artifacts or ghost trails while keeping the InfoBar fade animation intact.
+
+## Specifics of User Desires
+They instructed replacing the custom link label with a QPushButton using the shared accent styling, avoiding per-widget stylesheet hacks, and ensuring only the InfoBar container uses the opacity effect while verifying no unsupported QSS remains.
+
+## Actions Taken
+- Updated `gui.py — InfoBar.__init__` to instantiate a QPushButton for the action, set its `class` property to `"accent"`, assign a pointing cursor, and connect its `clicked` signal to the existing callback.
+- Removed the `LinkLabel` helper class and the label-specific QSS rules in `gui.py — APP_STYLE_TEMPLATE` so the global accent button styling applies consistently.
+- Confirmed `QGraphicsOpacityEffect` remains scoped to the InfoBar container and reran `python -m compileall ch_career_mode` to ensure the module compiles cleanly without console warnings about unsupported properties.
+
+## Helpful Hints
+When accent actions need to live inside fading surfaces, prefer QPushButton instances with shared styling; hyperlink labels can fight opacity animations and platform hover rendering.
+
+---
