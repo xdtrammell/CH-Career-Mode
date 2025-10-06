@@ -684,3 +684,23 @@ They specifically wanted the spin box to append the word "minutes" with proper s
 Qt automatically applies the control palette colors to suffix text, so future visual tweaks can rely on stylesheet updates rather than additional code when modifying spin box suffix presentation.
 
 ---
+# Session 30 — 2025-10-07 00:45
+
+## Topic
+Implemented the short-song filter control within the Filters workflow tab alongside dynamic unit messaging updates.
+
+## User Desires
+The user wanted a new filter to skip abnormally short charts while keeping the existing long-chart filter and meme toggle consistent with the refreshed layout.
+
+## Specifics of User Desires
+They requested a seconds-based spin box that automatically switches its suffix to minutes past the one-minute mark, persists through QSettings, and applies immediately during library scans without altering previously delivered behaviors.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to instantiate `self.spin_exclude_short_songs`, wire tooltip-rich persistence, and insert the control above the long-chart option in the Filters `QFormLayout`.
+- Connected the new spin box to `_on_short_song_threshold_changed` for suffix swapping and `_on_exclude_short_songs_changed` for QSettings storage plus live library refreshes.
+- Extended `gui.py — MainWindow._eligible_library_songs` to reject songs shorter than the configured threshold prior to the long-chart check, ensuring the new setting affects tiering and previews immediately.
+
+## Helpful Hints
+The short-song suffix toggling relies on `QSpinBox.setSuffix`, so future localization work should update both the seconds and minutes strings together to keep the UI consistent.
+
+---

@@ -1007,6 +1007,23 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
 
+        if self.settings.contains("exclude_short_songs_seconds"):
+            stored_exclude_short = self.settings.value("exclude_short_songs_seconds", 30)
+        else:
+            stored_exclude_short = 30
+        try:
+            stored_exclude_short = int(stored_exclude_short)
+        except (TypeError, ValueError):
+            stored_exclude_short = 30
+        stored_exclude_short = max(5, min(600, stored_exclude_short))
+        self.spin_exclude_short_songs = QSpinBox()
+        self.spin_exclude_short_songs.setRange(5, 600)
+        self.spin_exclude_short_songs.setSingleStep(5)
+        self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
+        self.spin_exclude_short_songs.setSuffix(" seconds")
+        self.spin_exclude_short_songs.setValue(stored_exclude_short)
+        self._on_short_song_threshold_changed(self.spin_exclude_short_songs.value())
+
         if self.settings.contains("exclude_long_songs_minutes"):
             stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
         else:
@@ -1288,6 +1305,8 @@ class MainWindow(QMainWindow):
         filters_form.setSpacing(10)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
+        self.lbl_exclude_short_songs = QLabel("Exclude songs shorter than:")
+        filters_form.addRow(self.lbl_exclude_short_songs, self.spin_exclude_short_songs)
         self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
         filters_form.addRow(self.chk_exclude_meme)
@@ -1336,6 +1355,8 @@ class MainWindow(QMainWindow):
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.spin_exclude_short_songs.valueChanged.connect(self._on_short_song_threshold_changed)
+        self.spin_exclude_short_songs.valueChanged.connect(self._on_exclude_short_songs_changed)
         self.spin_exclude_long_charts.valueChanged.connect(self._on_exclude_long_songs_changed)
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.chk_weight_nps.stateChanged.connect(self._on_weight_by_nps_changed)
@@ -1795,6 +1816,19 @@ class MainWindow(QMainWindow):
         self.settings.setValue("exclude_memes", state == Qt.Checked)
         self._refresh_library_view()
 
+    def _on_short_song_threshold_changed(self, value: int) -> None:
+        """Update the short-song suffix to reflect seconds versus minutes."""
+        if not hasattr(self, "spin_exclude_short_songs"):
+            return
+        suffix = " seconds" if value < 60 else " minutes"
+        if self.spin_exclude_short_songs.suffix() != suffix:
+            self.spin_exclude_short_songs.setSuffix(suffix)
+
+    def _on_exclude_short_songs_changed(self, value: int) -> None:
+        """Persist the short-song cutoff and refresh the library."""
+        self.settings.setValue("exclude_short_songs_seconds", value)
+        self._refresh_library_view()
+
     def _on_exclude_long_songs_changed(self, value: int) -> None:
         """Persist the long-chart cutoff and refresh the library."""
         self.settings.setValue("exclude_long_songs_minutes", value)
@@ -2164,6 +2198,9 @@ class MainWindow(QMainWindow):
         weight_by_nps = self._weight_by_nps_enabled()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
+        short_song_cutoff = (
+            self.spin_exclude_short_songs.value() if hasattr(self, "spin_exclude_short_songs") else 30
+        )
         long_song_cutoff = (
             self.spin_exclude_long_charts.value() if hasattr(self, "spin_exclude_long_charts") else 60
         )
@@ -2189,6 +2226,8 @@ class MainWindow(QMainWindow):
                 continue
             genre_key = (song.genre or "").strip().lower()
             if exclude_memes and genre_key in MEME_GENRES:
+                continue
+            if song.length_ms and song.length_ms < short_song_cutoff * 1000:
                 continue
             if song.length_ms and song.length_ms > long_song_cutoff * 60_000:
                 continue
