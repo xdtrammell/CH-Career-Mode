@@ -1307,7 +1307,7 @@ class MainWindow(QMainWindow):
         filters_form.setSpacing(10)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        self.lbl_exclude_short_songs = QLabel("Exclude songs shorter than:")
+        self.lbl_exclude_short_songs = QLabel("Exclude charts shorter than:")
         filters_form.addRow(self.lbl_exclude_short_songs, self.spin_exclude_short_songs)
         self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
