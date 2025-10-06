@@ -571,3 +571,23 @@ They requested guard rails around `_animate_to` so that graphics effects are det
 
 ## Helpful Hints
 When expanding the tab system with new transitions, reuse the validity checks and widget detachment pattern so that Qt manages the effect lifecycle without unexpected crashes during rapid tab changes.
+# Session 24 — 2025-10-06 15:10
+
+## Topic
+Reordered the workflow settings tabs so the new grouping places tier rules first and moves advanced maintenance into its own pane.
+
+## User Desires
+The user wanted the workflow controls reshuffled into Rules, Filters, and Advanced tabs with updated option groupings that relocate Clear Cache beneath the theme selector.
+
+## Specifics of User Desires
+They specified the Rules tab should lead with tier counts and song allocation, followed by the long-song, difficulty, genre, artist, and NPS weighting toggles; Filters should only expose the meme exclusion toggle and minimum difficulty spinner; Advanced should retain theme selection alongside the Clear Cache action.
+
+## Actions Taken
+- Rebuilt `gui.py — MainWindow.__init__` tab construction so the Rules page now owns the tier counts, grouping checkboxes, and NPS weighting while Filters and Advanced contain only their requested controls.
+- Converted each workflow page to a dedicated `QFormLayout` with uniform 12px margins and 10px spacing to match the refreshed grouping requirements.
+- Verified the Clear Cache button now lives inside the Advanced tab form instead of the outer settings layout while keeping all signal connections intact.
+
+## Helpful Hints
+When adjusting future workflow options, add them through the corresponding `QFormLayout` so padding stays consistent and remember the Rules tab now initializes `self.lbl_artist_limit` for artist limit enable/disable toggling.
+
+---
