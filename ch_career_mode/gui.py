@@ -53,6 +53,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QStackedWidget,
 )
+import shiboken6
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
 from .scanner import ScanWorker, get_cache_path
@@ -763,16 +764,40 @@ class WorkflowTabs(QFrame):
         widget = self._stack.widget(index)
         if widget is None:
             return
-        if self._current_animation is not None:
-            self._current_animation.stop()
-            self._current_animation.deleteLater()
-            self._current_animation = None
-        if self._current_effect is not None:
-            target = self._current_effect.parent()
+        if self._current_animation is not None and shiboken6.isValid(self._current_animation):
+            try:
+                self._current_animation.stop()
+            except RuntimeError:
+                pass
+            try:
+                self._current_animation.deleteLater()
+            except RuntimeError:
+                pass
+        self._current_animation = None
+        if self._current_effect is not None and shiboken6.isValid(self._current_effect):
+            try:
+                target = self._current_effect.parent()
+            except RuntimeError:
+                target = None
             if isinstance(target, QWidget):
-                target.setGraphicsEffect(None)
-            self._current_effect.deleteLater()
-            self._current_effect = None
+                try:
+                    if target.graphicsEffect() == self._current_effect:
+                        target.setGraphicsEffect(None)
+                except RuntimeError:
+                    pass
+            try:
+                self._current_effect.deleteLater()
+            except RuntimeError:
+                pass
+        self._current_effect = None
+
+        existing_effect = widget.graphicsEffect()
+        if existing_effect is not None and shiboken6.isValid(existing_effect):
+            try:
+                widget.setGraphicsEffect(None)
+                existing_effect.deleteLater()
+            except RuntimeError:
+                pass
 
         effect = QGraphicsOpacityEffect(widget)
         effect.setOpacity(0.0)
@@ -784,12 +809,29 @@ class WorkflowTabs(QFrame):
         animation.setEasingCurve(QEasingCurve.InOutCubic)
 
         def _cleanup() -> None:
-            widget.setGraphicsEffect(None)
-            if self._current_effect is not None:
-                self._current_effect.deleteLater()
+            try:
+                if shiboken6.isValid(effect):
+                    target_widget = effect.parent()
+                    if isinstance(target_widget, QWidget):
+                        try:
+                            if target_widget.graphicsEffect() == effect:
+                                target_widget.setGraphicsEffect(None)
+                        except RuntimeError:
+                            pass
+                    effect.deleteLater()
+            except RuntimeError:
+                pass
+
+            if self._current_effect is effect:
                 self._current_effect = None
-            if self._current_animation is not None:
-                self._current_animation.deleteLater()
+
+            try:
+                if shiboken6.isValid(animation):
+                    animation.deleteLater()
+            except RuntimeError:
+                pass
+
+            if self._current_animation is animation:
                 self._current_animation = None
 
         animation.finished.connect(_cleanup)

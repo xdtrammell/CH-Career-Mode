@@ -552,3 +552,22 @@ They asked for a VS Code-style tab presentation beneath the Scan Card using the 
 
 ## Helpful Hints
 Use `WorkflowTabs.addTab` when introducing new workflow panes so they inherit the shared animation and styling, and keep inner page layouts margin-free because the tab panel already applies the 16px padding for consistent spacing.
+---
+# Session 23 — 2025-10-06 12:30
+
+## Topic
+Stabilized the workflow tab fade animation lifecycle introduced in Session 22.
+
+## User Desires
+The user wanted the new tab transitions to avoid crashes by ensuring opacity effects are cleaned up safely between animations.
+
+## Specifics of User Desires
+They requested guard rails around `_animate_to` so that graphics effects are detached before deletion, previously destroyed effects are not referenced, and cleanup handlers survive rapid tab switching.
+
+## Actions Taken
+- Hardened `gui.py — WorkflowTabs._animate_to` to verify animations and graphics effects remain valid with `shiboken6.isValid`, detaching any existing effect from the widget before scheduling deletion.
+- Wrapped the fade animation stop and cleanup routines in `try/except` blocks so repeated transitions cannot raise `RuntimeError` when Qt has already disposed of an object.
+- Ensured the finished callback only clears internal references when they still point at the running animation/effect, preventing double deletions.
+
+## Helpful Hints
+When expanding the tab system with new transitions, reuse the validity checks and widget detachment pattern so that Qt manages the effect lifecycle without unexpected crashes during rapid tab changes.
