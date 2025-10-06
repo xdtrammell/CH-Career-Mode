@@ -1007,21 +1007,24 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
 
-        if self.settings.contains("exclude_short_songs_seconds"):
-            stored_exclude_short = self.settings.value("exclude_short_songs_seconds", 30)
-        else:
-            stored_exclude_short = 30
-        try:
-            stored_exclude_short = int(stored_exclude_short)
-        except (TypeError, ValueError):
-            stored_exclude_short = 30
-        stored_exclude_short = max(5, min(600, stored_exclude_short))
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
-        self._short_song_seconds = stored_exclude_short
+        default_short_seconds = 30
+        raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
+        has_short_setting = self.settings.contains("exclude_short_songs_seconds")
+        try:
+            stored_exclude_short = int(raw_short_setting)
+        except (TypeError, ValueError):
+            stored_exclude_short = default_short_seconds
+        stored_exclude_short = max(5, min(600, stored_exclude_short))
+        self._short_song_seconds = default_short_seconds
         self._set_short_song_spinbox_display_from_seconds(self._short_song_seconds)
+        if has_short_setting:
+            self._set_short_song_spinbox_display_from_seconds(stored_exclude_short)
+        else:
+            self.settings.setValue("exclude_short_songs_seconds", self._short_song_seconds)
 
         if self.settings.contains("exclude_long_songs_minutes"):
             stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)

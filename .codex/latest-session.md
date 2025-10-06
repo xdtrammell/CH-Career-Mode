@@ -725,3 +725,23 @@ They requested that increments past sixty seconds rewrite the displayed number a
 When extending these filters, prefer reading `_short_song_seconds` for the authoritative threshold since the spin box may be presenting either minutes or seconds depending on the current value.
 
 ---
+# Session 32 — 2025-10-06 09:28
+
+## Topic
+Reaffirmed the short-song filter default so the spinner initializes at thirty seconds before applying saved preferences.
+
+## User Desires
+The reviewer noted the new conversion logic made the filter start at one minute and asked for the control to open on the expected 30-second default.
+
+## Specifics of User Desires
+They wanted the Filters tab spin box to display "30 seconds" on launch unless a prior session stored an alternate threshold, ensuring newcomers see the intended baseline.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to seed `_short_song_seconds` with the 30-second default, render that state immediately, and then layer any stored preference on top.
+- Persisted the default threshold to QSettings when no prior value exists so future runs stay aligned with the intended baseline without overriding existing choices.
+- Recompiled the GUI module via `python -m compileall ch_career_mode` to confirm the refactor introduces no syntax regressions.
+
+## Helpful Hints
+When adding more unit-aware filters, initialize widgets with their canonical defaults before reading settings so the UI renders a predictable baseline even if persistence data is missing or malformed.
+
+---
