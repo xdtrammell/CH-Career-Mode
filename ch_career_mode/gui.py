@@ -3,6 +3,9 @@
 import math
 import os
 import random
+import shutil
+import subprocess
+import sys
 import time
 from typing import Dict, List, Optional
 from dataclasses import replace
@@ -18,6 +21,7 @@ from PySide6.QtCore import (
     QEasingCurve,
     QVariantAnimation,
     QPropertyAnimation,
+    QPoint,
 )
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -52,6 +56,7 @@ from PySide6.QtWidgets import (
     QScrollBar,
     QLayout,
     QStackedWidget,
+    QMenu,
 )
 import shiboken6
 
@@ -1096,6 +1101,8 @@ class MainWindow(QMainWindow):
         self.lib_list.setDefaultDropAction(Qt.CopyAction)
         self.lib_list.setAcceptDrops(False)
         self.lib_list.library_source = True
+        self.lib_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lib_list.customContextMenuRequested.connect(self._on_song_context_menu)
         self._list_delegates.append(self._apply_compact_list_style(self.lib_list))
 
         self.tiers_container = QWidget()
@@ -1969,6 +1976,8 @@ class MainWindow(QMainWindow):
         tier_count = self.spin_tiers.value()
         for idx in range(tier_count):
             tier = TierList(self._tier_name(idx), drop_handler=self._handle_library_drop)
+            tier.setContextMenuPolicy(Qt.CustomContextMenu)
+            tier.customContextMenuRequested.connect(self._on_song_context_menu)
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
             self._list_delegates.append(self._apply_compact_list_style(tier, variant="tier"))
             self._sync_tier_height(tier)
@@ -2134,6 +2143,106 @@ class MainWindow(QMainWindow):
             if viewport_height > 0 and content_height <= viewport_height:
                 self.tiers_scroll.verticalScrollBar().setValue(0)
         self._sync_external_tier_scrollbar()
+
+    def _on_song_context_menu(self, pos: QPoint) -> None:
+        """Show a context menu for a song item with file actions."""
+
+        source = self.sender()
+        if not isinstance(source, QListWidget):
+            return
+        item = source.itemAt(pos)
+        if item is None:
+            return
+        song = item.data(Qt.UserRole)
+        if not isinstance(song, Song):
+            return
+
+        menu = QMenu(source)
+        show_action = menu.addAction("Show in File Explorer")
+        show_action.triggered.connect(lambda _=False, s=song: self._show_in_explorer(s))
+        global_pos = source.mapToGlobal(pos)
+        menu.exec(global_pos)
+
+    def _show_in_explorer(self, song: Song) -> None:
+        """Open the operating system's file browser highlighting the song file."""
+
+        candidates: List[str] = []
+        for attr in ("chart_path", "path"):
+            candidate = getattr(song, attr, None)
+            if candidate:
+                candidates.append(os.path.abspath(candidate))
+
+        if not candidates:
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                "This song does not have a known file location on disk.",
+            )
+            return
+
+        highlight_target = next((path for path in candidates if os.path.isfile(path)), None)
+        directory_candidate: Optional[str] = None
+        if highlight_target:
+            directory_candidate = os.path.dirname(highlight_target)
+        else:
+            for path in candidates:
+                if os.path.isdir(path):
+                    directory_candidate = path
+                    break
+                parent = os.path.dirname(path)
+                if parent and os.path.isdir(parent):
+                    directory_candidate = parent
+                    break
+
+        if not directory_candidate:
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                "Could not locate this song's files. They may have been moved or deleted.",
+            )
+            return
+
+        if highlight_target is None:
+            QMessageBox.warning(
+                self,
+                "File Missing",
+                "The song file could not be found. Opening the containing folder instead.",
+            )
+
+        try:
+            if sys.platform.startswith("win"):
+                if highlight_target and os.path.isfile(highlight_target):
+                    subprocess.Popen(["explorer", "/select,", os.path.normpath(highlight_target)])
+                else:
+                    subprocess.Popen(["explorer", os.path.normpath(directory_candidate)])
+                return
+            if sys.platform.startswith("darwin"):
+                if highlight_target and os.path.isfile(highlight_target):
+                    subprocess.Popen(["open", "-R", highlight_target])
+                else:
+                    subprocess.Popen(["open", directory_candidate])
+                return
+
+            if highlight_target and os.path.isfile(highlight_target) and shutil.which("nautilus"):
+                subprocess.Popen(["nautilus", "--select", highlight_target])
+                return
+            if shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", directory_candidate])
+                return
+
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                "Open Folder Failed",
+                f"Could not open the folder in a file browser.\n\n{exc}",
+            )
+            return
+
+        QMessageBox.warning(
+            self,
+            "Open Folder Failed",
+            "Could not find a compatible file manager to open the folder.",
+        )
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
         """Remove a song from a tier and return it to the library pane."""

@@ -745,3 +745,24 @@ They wanted the Filters tab spin box to display "30 seconds" on launch unless a 
 When adding more unit-aware filters, initialize widgets with their canonical defaults before reading settings so the UI renders a predictable baseline even if persistence data is missing or malformed.
 
 ---
+# Session 33 — 2025-10-06 11:10
+
+## Topic
+Enabled context menus on song lists to open items in the native file browser.
+
+## User Desires
+The user requested a right-click option across the library and tier lists to reveal the underlying song files directly inside their operating system's file explorer.
+
+## Specifics of User Desires
+They specified that the action should appear in a custom context menu, rely on each list item's stored Song payload, and launch the OS file browser with the target file selected when possible.
+
+## Actions Taken
+- Configured `gui.py — MainWindow.__init__` and `_rebuild_tier_widgets` to expose a shared custom context-menu handler on the library and every `TierList`.
+- Added `gui.py — MainWindow._on_song_context_menu` to surface a "Show in File Explorer" action that passes the associated `Song` into a new launcher helper.
+- Implemented `gui.py — MainWindow._show_in_explorer` to resolve chart or song paths, warn when assets are missing, and invoke Explorer, Finder, Nautilus, or xdg-open as appropriate.
+- Verified the module still compiles by running `python -m compileall ch_career_mode`.
+
+## Helpful Hints
+The explorer helper prefers real chart files when available, falls back to the song.ini location, and gracefully informs the user when only the containing folder can be opened, so future actions should reuse it for other file-based commands.
+
+---
