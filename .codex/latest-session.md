@@ -1,74 +1,29 @@
-# Session 1 — 2025-09-25 11:10
+# Session 1 — 2025-09-25 09:38
 
 ## Topic
-Safeguard the tier builder width during startup and resizing.
+Relocate and redesign NPS scan progress bar in settings UI.
 
 ## User Desires
-Guarantee the window opens wide enough for all tier columns while preserving layout balance and fallback behavior when space is constrained.
+Make the NPS scan status more prominent and associated with the selected directory in the settings panel.
 
 ## Specifics of User Desires
-- Apply the main window minimum size before the initial resize so launch dimensions accommodate three tier columns.
-- Re-run `_update_size_constraints()` after rebuilding tier widgets and resize the window when runtime changes drop below the minimum width.
-- Provide horizontal scrolling as a fallback whenever the window ends up narrower than required so columns never disappear silently.
+- Move the existing NPS scan progress UI directly beneath the directory label in `gui.py`.
+- Ensure the progress bar spans the width of the directory label, showing progress during scans.
+- After completion, display a "NPS scan complete" label instead of the bar.
+- Remove the old small progress indicator at the bottom of the settings panel while keeping signals intact.
 
 ## Actions Taken
-- Set the minimum window size prior to the first resize in `MainWindow.__init__` and triggered a constraints refresh immediately after rebuilding tiers.
-- Extended `_update_size_constraints()` to capture the pre-adjust width, enforce the minimum width via `resize`, and reapply the global minimum size guard.
-- Toggled the tier scroll area's horizontal policy based on the pre-adjust width so users can pan to hidden columns if the window shrinks below the minimum.
+- Reviewed repository instructions and prepared to modify `gui.py` accordingly.
 
 ## Helpful Hints
-- Call `_update_size_constraints()` whenever tier counts or window metrics change to keep scroll behavior and minimums aligned.
-- Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
-- The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
+- Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
-# Session 20 — 2025-10-04 16:45
-
-## Topic
-Unify the scan workflow into a persistent Scan Card with inline messaging.
-
-## User Desires
-The user wanted to replace the dual progress bars and blocking dialog with a single workflow card that tracks both scan phases, keeps status text in place, and uses a non-blocking inline notice.
-
-## Specifics of User Desires
-They asked for scan state tracking across idle/phase1/phase2/complete/cancel/error, a rounded card with phase/detail labels, a shared progress bar, cancel and hide actions, persistence of the collapsed state, keyboard-friendly focus handling, and an inline InfoBar moment instead of the phase-1 QMessageBox.
-
-## Actions Taken
-- Added `gui.py — InfoBar` and `ScanCard` to style the unified scan widget with notice support, progress bar, and inline actions.
-- Introduced scan state constants plus `MainWindow._set_scan_state`, `_set_scan_card_collapsed`, and `_on_scan_card_hidden` to manage visibility, persistence, and button availability across workflow phases.
-- Reworked `MainWindow.scan_now`, `_update_scan_progress_value`, `_on_nps_progress`, `_on_nps_done`, and `_scan_finished` to drive the Scan Card, reuse one progress bar for both phases, emit inline notices, and drop the blocking completion message box.
-- Hooked keyboard shortcuts by overriding `MainWindow.keyPressEvent` and `ScanCard.keyPressEvent` so Escape focuses Cancel during scans and Enter/Space toggles Hide when finished.
-
-## Helpful Hints
-- Call `_set_scan_state` when introducing new scan transitions so the card updates button visibility and collapse persistence automatically.
-- Use `scan_card.show_notice()` for short-lived inline status moments—`clear_notice()` resets it when switching phases.
-- The scan card collapse preference is stored under `scan_card_collapsed`; hide actions persist the flag until the next explicit scan.
 
 ---
 ---
-
-# Session 2 — 2025-10-03 14:10
-
-## Topic
-Second follow-up to guarantee Workflow buttons report final size hints before the window minimum is enforced.
-
-## User Desires
-The user observed that the Workflow actions still appeared truncated on first launch and wanted the app to remeasure button widths after Qt finished applying fonts and DPI scaling.
-
-## Specifics of User Desires
-They requested a helper that refreshes the three action buttons’ minimum widths using up-to-date size hints, to call that helper after building the Workflow panel, again via a zero-delay timer, and once more on the first show before recalculating the global size constraints. They also wanted the width computation to consider live size hints and include a small safety buffer.
-
-## Actions Taken
-- Added `gui.py — MainWindow._refresh_workflow_button_minimums` and `MainWindow._refresh_workflow_buttons_and_update` to recalculate button minimums and immediately reapply size constraints when needed.
-- Updated `gui.py — MainWindow.__init__` to invoke the refresh helper after assembling the Workflow layout, reuse it when enforcing constraints, and schedule another pass with `QTimer.singleShot(0, ...)`.
-- Overrode `gui.py — MainWindow.showEvent` to trigger one final refresh/update pair on the first paint, and expanded `_workflow_actions_minimum_width` to use live size hints with an extra padding buffer.
-
-## Helpful Hints
-If future DPI or theme toggles happen dynamically, call `_refresh_workflow_buttons_and_update` so the Workflow panel can expand before Qt tries to compress the button labels.
-
----
 ---
 
-# Session 3 — 2025-09-25 10:13
+# Session 2 — 2025-09-25 10:13
 
 ## Topic
 Material-themed redesign of main window with inline scan progress.
@@ -96,32 +51,9 @@ Restyle the PySide6 GUI to feel modern and cohesive, embed scan progress within 
 
 ---
 ---
-
-# Session 4 — 2025-09-25 09:38
-
-## Topic
-Relocate and redesign NPS scan progress bar in settings UI.
-
-## User Desires
-Make the NPS scan status more prominent and associated with the selected directory in the settings panel.
-
-## Specifics of User Desires
-- Move the existing NPS scan progress UI directly beneath the directory label in `gui.py`.
-- Ensure the progress bar spans the width of the directory label, showing progress during scans.
-- After completion, display a "NPS scan complete" label instead of the bar.
-- Remove the old small progress indicator at the bottom of the settings panel while keeping signals intact.
-
-## Actions Taken
-- Reviewed repository instructions and prepared to modify `gui.py` accordingly.
-
-## Helpful Hints
-- Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
 
----
----
-
-# Session 5 — 2025-09-25 10:15
+# Session 3 — 2025-09-25 10:15
 
 ## Topic
 Rebalance main window layout widths and regroup settings controls.
@@ -147,8 +79,9 @@ Ensure the tier builder remains fully visible, keep settings from collapsing, an
 
 ---
 ---
+---
 
-# Session 6 — 2025-09-25 10:45
+# Session 4 — 2025-09-25 10:45
 
 ## Topic
 Rollback window refactor to material-themed baseline.
@@ -173,8 +106,34 @@ Restore the GUI implementation to the state captured in commit e07301b after bei
 
 ---
 ---
+---
 
-# Session 7 — 2025-10-02 09:23
+# Session 5 — 2025-09-25 11:10
+
+## Topic
+Safeguard the tier builder width during startup and resizing.
+
+## User Desires
+Guarantee the window opens wide enough for all tier columns while preserving layout balance and fallback behavior when space is constrained.
+
+## Specifics of User Desires
+- Apply the main window minimum size before the initial resize so launch dimensions accommodate three tier columns.
+- Re-run `_update_size_constraints()` after rebuilding tier widgets and resize the window when runtime changes drop below the minimum width.
+- Provide horizontal scrolling as a fallback whenever the window ends up narrower than required so columns never disappear silently.
+
+## Actions Taken
+- Set the minimum window size prior to the first resize in `MainWindow.__init__` and triggered a constraints refresh immediately after rebuilding tiers.
+- Extended `_update_size_constraints()` to capture the pre-adjust width, enforce the minimum width via `resize`, and reapply the global minimum size guard.
+- Toggled the tier scroll area's horizontal policy based on the pre-adjust width so users can pan to hidden columns if the window shrinks below the minimum.
+
+## Helpful Hints
+- Call `_update_size_constraints()` whenever tier counts or window metrics change to keep scroll behavior and minimums aligned.
+- Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
+- The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
+---
+---
+
+# Session 6 — 2025-10-02 09:23
 
 ## Topic
 Buffer the launch width so tier columns remain visible by default.
@@ -197,6 +156,34 @@ Keep all three tier columns visible when the window opens while preserving exist
 - Call `_update_size_constraints()` whenever column counts change so the guard check can reapply the buffered width.
 ---
 
+---
+---
+---
+
+# Session 7 — 2025-10-02 09:51
+
+## Topic
+Recalculate tier panel minimum width using explicit layout margins.
+
+## User Desires
+Ensure the tier builder columns are fully visible at launch by correcting the width calculation to include the tiers layout margin.
+
+## Specifics of User Desires
+- Define a shared constant for the tier grid layout margin instead of relying on hardcoded literals.
+- Incorporate the margin into the tier panel minimum width computation so the third column is never clipped.
+- Update the layout configuration to reference the new constant for consistency.
+
+## Actions Taken
+- Added `TIER_GRID_LAYOUT_MARGIN` and reused it when configuring the tier grid layout margins.
+- Expanded `TIERS_PANEL_MIN_WIDTH` to include both sides of the tier grid margin in its formula.
+- Retained existing safeguards and tests to confirm the GUI module still compiles.
+
+## Helpful Hints
+- Any future change to the tier grid spacing should update `TIER_GRID_LAYOUT_MARGIN` to keep derived widths in sync.
+- Verify `_update_size_constraints()` if additional padding constants are introduced so the enforced widths remain accurate.
+---
+
+---
 ---
 ---
 
@@ -225,60 +212,9 @@ Guarantee all three tier columns render without truncation at startup while pres
 
 ---
 ---
-
-# Session 9 — 2025-10-02 10:25
-
-## Topic
-Account for window decorations when sizing the main window.
-
-## User Desires
-Ensure the tier builder's third column is always visible at startup by padding the window width for OS chrome while keeping the existing safeguards.
-
-## Specifics of User Desires
-- Replace the fixed default resize with logic that measures window decorations and adds an appropriate safety buffer.
-- Apply the same padded width inside `_update_size_constraints()` whenever the window is forced back to its minimum size.
-- Retain the horizontal scroll fallback so users can still reach hidden columns after manually shrinking the window.
-
-## Actions Taken
-- Added a `_decoration_padding()` helper and used it during initialization to expand the window width by the larger of the measured chrome or a 40px buffer.
-- Updated `_update_size_constraints()` to reuse the padded width whenever it corrects a too-small window.
-- Kept the existing horizontal scroll toggle so users who resize below the minimum can still access all tier columns.
-
-## Helpful Hints
-- The `_decoration_padding()` helper should be reused if future features need to guarantee full column visibility after dynamic layout changes.
-- If tier column counts change, update the underlying constants before relying on the padding helper to avoid stale minimums.
 ---
 
----
----
-
-# Session 10 — 2025-10-02 09:51
-
-## Topic
-Recalculate tier panel minimum width using explicit layout margins.
-
-## User Desires
-Ensure the tier builder columns are fully visible at launch by correcting the width calculation to include the tiers layout margin.
-
-## Specifics of User Desires
-- Define a shared constant for the tier grid layout margin instead of relying on hardcoded literals.
-- Incorporate the margin into the tier panel minimum width computation so the third column is never clipped.
-- Update the layout configuration to reference the new constant for consistency.
-
-## Actions Taken
-- Added `TIER_GRID_LAYOUT_MARGIN` and reused it when configuring the tier grid layout margins.
-- Expanded `TIERS_PANEL_MIN_WIDTH` to include both sides of the tier grid margin in its formula.
-- Retained existing safeguards and tests to confirm the GUI module still compiles.
-
-## Helpful Hints
-- Any future change to the tier grid spacing should update `TIER_GRID_LAYOUT_MARGIN` to keep derived widths in sync.
-- Verify `_update_size_constraints()` if additional padding constants are introduced so the enforced widths remain accurate.
----
-
----
----
-
-# Session 11 — 2025-10-02 10:20
+# Session 9 — 2025-10-02 10:20
 
 ## Topic
 Ensure tier builder columns remain fully visible via layout constraints.
@@ -303,8 +239,36 @@ Keep all three tier columns visible at startup by fixing the Tier Builder layout
 
 ---
 ---
+---
 
-# Session 12 — 2025-10-02 10:50
+# Session 10 — 2025-10-02 10:25
+
+## Topic
+Account for window decorations when sizing the main window.
+
+## User Desires
+Ensure the tier builder's third column is always visible at startup by padding the window width for OS chrome while keeping the existing safeguards.
+
+## Specifics of User Desires
+- Replace the fixed default resize with logic that measures window decorations and adds an appropriate safety buffer.
+- Apply the same padded width inside `_update_size_constraints()` whenever the window is forced back to its minimum size.
+- Retain the horizontal scroll fallback so users can still reach hidden columns after manually shrinking the window.
+
+## Actions Taken
+- Added a `_decoration_padding()` helper and used it during initialization to expand the window width by the larger of the measured chrome or a 40px buffer.
+- Updated `_update_size_constraints()` to reuse the padded width whenever it corrects a too-small window.
+- Kept the existing horizontal scroll toggle so users who resize below the minimum can still access all tier columns.
+
+## Helpful Hints
+- The `_decoration_padding()` helper should be reused if future features need to guarantee full column visibility after dynamic layout changes.
+- If tier column counts change, update the underlying constants before relying on the padding helper to avoid stale minimums.
+---
+
+---
+---
+---
+
+# Session 11 — 2025-10-02 10:50
 
 ## Topic
 Align tier builder scrollbar behaviour with layout padding.
@@ -329,8 +293,9 @@ Stop the Tier Builder panel from showing a vertical scrollbar by default and sty
 
 ---
 ---
+---
 
-# Session 13 — 2025-10-02 11:15
+# Session 12 — 2025-10-02 11:15
 
 ## Topic
 Reposition tier builder scrollbar gutter spacing.
@@ -355,8 +320,9 @@ Make the tier builder scrollbar feel external to the third column and keep it sl
 
 ---
 ---
+---
 
-# Session 14 — 2025-10-02 12:45
+# Session 13 — 2025-10-02 12:45
 
 ## Topic
 External tier scrollbar gutter integration.
@@ -381,8 +347,9 @@ Ensure the tier builder's third column stays visible while relocating the vertic
 
 ---
 ---
+---
 
-# Session 15 — 2025-10-02 13:30
+# Session 14 — 2025-10-02 13:30
 
 ## Topic
 Stabilise initial tier list sizing to prevent oversized first paint.
@@ -407,8 +374,9 @@ Ensure the tier builder respects the configured row count at startup and that wr
 ---
 ---
 ---
+---
 
-# Session 16 — 2025-10-02 14:05
+# Session 15 — 2025-10-02 14:05
 
 ## Topic
 Persist the tier builder count preference with a new nine-tier default.
@@ -427,8 +395,9 @@ Load the tier count from settings in `MainWindow.__init__`, defaulting to nine t
 If the allowed tier range changes, update the clamp in both the constructor and settings handler so persisted values stay valid.
 ---
 ---
+---
 
-# Session 17 — 2025-10-03 10:08
+# Session 16 — 2025-10-03 10:08
 
 ## Topic
 Ensure the Workflow action buttons retain readable labels regardless of the initial window size.
@@ -448,8 +417,9 @@ They requested enforcing minimum widths based on the buttons’ size hints, maki
 If additional controls are added to the Workflow row, update `_workflow_actions_minimum_width` so the spacing and margin calculation still reflects the full set of buttons.
 ---
 ---
+---
 
-# Session 18 — 2025-10-03 12:30
+# Session 17 — 2025-10-03 12:30
 
 ## Topic
 Follow-up layout adjustments to ensure Workflow buttons drive the initial window sizing.
@@ -467,6 +437,30 @@ They asked to delay the initial resizing until after the full layout is assemble
 ## Helpful Hints
 Whenever new controls are added beside the Workflow buttons, recheck `_workflow_actions_minimum_width` so the margin and spacing math still yields the correct minimum width for the settings column.
 
+---
+---
+---
+
+# Session 18 — 2025-10-03 14:10
+
+## Topic
+Second follow-up to guarantee Workflow buttons report final size hints before the window minimum is enforced.
+
+## User Desires
+The user observed that the Workflow actions still appeared truncated on first launch and wanted the app to remeasure button widths after Qt finished applying fonts and DPI scaling.
+
+## Specifics of User Desires
+They requested a helper that refreshes the three action buttons’ minimum widths using up-to-date size hints, to call that helper after building the Workflow panel, again via a zero-delay timer, and once more on the first show before recalculating the global size constraints. They also wanted the width computation to consider live size hints and include a small safety buffer.
+
+## Actions Taken
+- Added `gui.py — MainWindow._refresh_workflow_button_minimums` and `MainWindow._refresh_workflow_buttons_and_update` to recalculate button minimums and immediately reapply size constraints when needed.
+- Updated `gui.py — MainWindow.__init__` to invoke the refresh helper after assembling the Workflow layout, reuse it when enforcing constraints, and schedule another pass with `QTimer.singleShot(0, ...)`.
+- Overrode `gui.py — MainWindow.showEvent` to trigger one final refresh/update pair on the first paint, and expanded `_workflow_actions_minimum_width` to use live size hints with an extra padding buffer.
+
+## Helpful Hints
+If future DPI or theme toggles happen dynamically, call `_refresh_workflow_buttons_and_update` so the Workflow panel can expand before Qt tries to compress the button labels.
+
+---
 ---
 ---
 
@@ -491,6 +485,34 @@ Adjust the `_apply_shadow` parameters per widget to fine-tune elevation; keeping
 
 ---
 ---
+---
+
+# Session 20 — 2025-10-04 16:45
+
+## Topic
+Unify the scan workflow into a persistent Scan Card with inline messaging.
+
+## User Desires
+The user wanted to replace the dual progress bars and blocking dialog with a single workflow card that tracks both scan phases, keeps status text in place, and uses a non-blocking inline notice.
+
+## Specifics of User Desires
+They asked for scan state tracking across idle/phase1/phase2/complete/cancel/error, a rounded card with phase/detail labels, a shared progress bar, cancel and hide actions, persistence of the collapsed state, keyboard-friendly focus handling, and an inline InfoBar moment instead of the phase-1 QMessageBox.
+
+## Actions Taken
+- Added `gui.py — InfoBar` and `ScanCard` to style the unified scan widget with notice support, progress bar, and inline actions.
+- Introduced scan state constants plus `MainWindow._set_scan_state`, `_set_scan_card_collapsed`, and `_on_scan_card_hidden` to manage visibility, persistence, and button availability across workflow phases.
+- Reworked `MainWindow.scan_now`, `_update_scan_progress_value`, `_on_nps_progress`, `_on_nps_done`, and `_scan_finished` to drive the Scan Card, reuse one progress bar for both phases, emit inline notices, and drop the blocking completion message box.
+- Hooked keyboard shortcuts by overriding `MainWindow.keyPressEvent` and `ScanCard.keyPressEvent` so Escape focuses Cancel during scans and Enter/Space toggles Hide when finished.
+
+## Helpful Hints
+- Call `_set_scan_state` when introducing new scan transitions so the card updates button visibility and collapse persistence automatically.
+- Use `scan_card.show_notice()` for short-lived inline status moments—`clear_notice()` resets it when switching phases.
+- The scan card collapse preference is stored under `scan_card_collapsed`; hide actions persist the flag until the next explicit scan.
+
+---
+---
+---
+
 # Session 21 — 2025-10-05 14:20
 
 ## Topic
@@ -509,4 +531,5 @@ They asked for the bar text to show phase-specific messaging (percent for phase 
 ## Helpful Hints
 Whenever new scan states are introduced, wire them through `_set_scan_state` so the progress color animation and inline text formatting stay consistent.
 
+---
 ---
