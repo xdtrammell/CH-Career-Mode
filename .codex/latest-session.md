@@ -606,3 +606,23 @@ They requested Rules contain the tier spin boxes followed by the minimum difficu
 When adjusting these forms in the future, remember that the Rules page now owns the minimum difficulty spinner while the Filters page retains the artist limit label for enable-state toggling in `_apply_artist_mode_state`.
 
 ---
+# Session 26 — 2025-10-06 19:05
+
+## Topic
+Adjusted the workflow filters tab to house the long-song toggle per the latest review feedback.
+
+## User Desires
+The user wanted the "Keep > 7:00 out of first two tiers" checkbox relocated from the Rules tab into the Filters tab so related filtering options stay grouped together.
+
+## Specifics of User Desires
+They specified that the long-song checkbox should appear above the existing meme exclusion toggle within the Filters form while leaving all other tab contents unchanged.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` so the Rules form stops adding `self.chk_longrule` and the Filters form inserts it ahead of the meme exclusion checkbox.
+- Verified that the new ordering maintains the shared 12px margins and 10px spacing so layout rhythm remains consistent.
+- Confirmed that the checkbox retains its original signal connection since only its form container changed.
+
+## Helpful Hints
+Future adjustments to filter options should continue to leverage the Filters tab `QFormLayout` so spacing stays uniform, and note that the artist limit label still precedes the long-song rule for clarity.
+
+---

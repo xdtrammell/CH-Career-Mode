@@ -1261,7 +1261,6 @@ class MainWindow(QMainWindow):
         rules_form.addRow("Tiers:", self.spin_tiers)
         rules_form.addRow("Songs per tier:", self.spin_songs_per)
         rules_form.addRow("Minimum difficulty:", self.spin_min_diff)
-        rules_form.addRow(self.chk_longrule)
         rules_form.addRow(self.chk_lower_official)
         rules_form.addRow(self.chk_weight_nps)
         rules_form.addRow(self.chk_group_genre)
@@ -1273,6 +1272,7 @@ class MainWindow(QMainWindow):
         filters_form.setSpacing(10)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
+        filters_form.addRow(self.chk_longrule)
         filters_form.addRow(self.chk_exclude_meme)
 
         advanced_page = QWidget()
