@@ -1006,6 +1006,21 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
+
+        if self.settings.contains("exclude_long_songs_minutes"):
+            stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
+        else:
+            stored_exclude_minutes = 60
+        try:
+            stored_exclude_minutes = int(stored_exclude_minutes)
+        except (TypeError, ValueError):
+            stored_exclude_minutes = 60
+        stored_exclude_minutes = max(5, min(300, stored_exclude_minutes))
+        self.spin_exclude_long_charts = QSpinBox()
+        self.spin_exclude_long_charts.setRange(5, 300)
+        self.spin_exclude_long_charts.setSingleStep(5)
+        self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
+        self.spin_exclude_long_charts.setToolTip("Useful for excluding concerts or movie charts.")
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1272,8 +1287,13 @@ class MainWindow(QMainWindow):
         filters_form.setSpacing(10)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        filters_form.addRow(self.chk_longrule)
+        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than (minutes):")
+        filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
+        self.lbl_exclude_long_hint = QLabel("(Useful for filtering out full-length concerts or movie charts.)")
+        self.lbl_exclude_long_hint.setWordWrap(True)
+        filters_form.addRow("", self.lbl_exclude_long_hint)
         filters_form.addRow(self.chk_exclude_meme)
+        filters_form.addRow(self.chk_longrule)
 
         advanced_page = QWidget()
         advanced_form = QFormLayout(advanced_page)
@@ -1318,6 +1338,7 @@ class MainWindow(QMainWindow):
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.spin_exclude_long_charts.valueChanged.connect(self._on_exclude_long_songs_changed)
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.chk_weight_nps.stateChanged.connect(self._on_weight_by_nps_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
@@ -1776,6 +1797,11 @@ class MainWindow(QMainWindow):
         self.settings.setValue("exclude_memes", state == Qt.Checked)
         self._refresh_library_view()
 
+    def _on_exclude_long_songs_changed(self, value: int) -> None:
+        """Persist the long-chart cutoff and refresh the library."""
+        self.settings.setValue("exclude_long_songs_minutes", value)
+        self._refresh_library_view()
+
     def _on_lower_official_changed(self, state: int) -> None:
         """Persist the Harmonix/Neversoft adjustment preference and refresh."""
         self.settings.setValue("lower_official", state == Qt.Checked)
@@ -2140,6 +2166,9 @@ class MainWindow(QMainWindow):
         weight_by_nps = self._weight_by_nps_enabled()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
+        long_song_cutoff = (
+            self.spin_exclude_long_charts.value() if hasattr(self, "spin_exclude_long_charts") else 60
+        )
         query = ""
         if apply_search_filter and hasattr(self, "search_box"):
             query = self.search_box.text().casefold().strip()
@@ -2162,6 +2191,8 @@ class MainWindow(QMainWindow):
                 continue
             genre_key = (song.genre or "").strip().lower()
             if exclude_memes and genre_key in MEME_GENRES:
+                continue
+            if song.length_ms and song.length_ms > long_song_cutoff * 60_000:
                 continue
             if apply_search_filter and not matches_query(song):
                 continue

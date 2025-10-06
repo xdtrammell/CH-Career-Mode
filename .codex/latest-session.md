@@ -626,3 +626,23 @@ They specified that the long-song checkbox should appear above the existing meme
 Future adjustments to filter options should continue to leverage the Filters tab `QFormLayout` so spacing stays uniform, and note that the artist limit label still precedes the long-song rule for clarity.
 
 ---
+# Session 27 — 2025-10-06 21:15
+
+## Topic
+Implemented a configurable long-chart exclusion filter inside the Filters workflow tab to satisfy the newest user review request.
+
+## User Desires
+The user wanted an additional spin box in the Filters tab that caps eligible charts by length so extremely long tracks are hidden by default.
+
+## Specifics of User Desires
+They specified adding a minutes-based threshold control after the artist limit spinner, persisting its value with QSettings, and ensuring it immediately affects the eligible library list without hiding songs that lack length metadata.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to create `self.spin_exclude_long_charts`, add the supporting label and helper text to the Filters form, and wire its `valueChanged` signal to a new persistence slot.
+- Implemented `gui.py — MainWindow._on_exclude_long_songs_changed` to save the minutes threshold and trigger `_refresh_library_view`.
+- Expanded `gui.py — MainWindow._eligible_library_songs` to skip songs exceeding the configured duration while leaving metadata-free charts untouched.
+
+## Helpful Hints
+When adjusting filter ordering later, remember the hint label is inserted via an empty-form label row so maintainers should preserve that blank label parameter to keep the helper copy aligned beneath the spin box.
+
+---
