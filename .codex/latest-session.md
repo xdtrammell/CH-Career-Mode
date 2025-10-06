@@ -704,3 +704,24 @@ They requested a seconds-based spin box that automatically switches its suffix t
 The short-song suffix toggling relies on `QSpinBox.setSuffix`, so future localization work should update both the seconds and minutes strings together to keep the UI consistent.
 
 ---
+# Session 31 — 2025-10-07 01:30
+
+## Topic
+Reworked the short-song filter spin box to convert between seconds and minutes while keeping persistence in raw seconds.
+
+## User Desires
+The reviewer wanted the UI to translate the threshold value when crossing the one-minute boundary so the display shows minutes instead of an inflated seconds count, all without breaking saved preferences or filtering behavior.
+
+## Specifics of User Desires
+They requested that increments past sixty seconds rewrite the displayed number as whole minutes, decrements below one minute revert to seconds, signals avoid double-firing during conversions, and internal logic always reason about the cutoff in total seconds.
+
+## Actions Taken
+- Added `gui.py — MainWindow._set_short_song_spinbox_display_from_seconds` to centralize range, suffix, and value adjustments while updating a `_short_song_seconds` cache used by other handlers.
+- Updated `gui.py — MainWindow._on_short_song_threshold_changed` to trigger conversions in both directions with signal blocking and to normalize keyboard edits onto supported increments.
+- Adjusted `gui.py — MainWindow._on_exclude_short_songs_changed` and `_eligible_library_songs` so persistence and filtering consistently consume the cached seconds value rather than the visual unit.
+- Ran `python -m compileall ch_career_mode` to verify the GUI module still compiles after the refactor.
+
+## Helpful Hints
+When extending these filters, prefer reading `_short_song_seconds` for the authoritative threshold since the spin box may be presenting either minutes or seconds depending on the current value.
+
+---

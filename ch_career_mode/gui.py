@@ -1020,9 +1020,8 @@ class MainWindow(QMainWindow):
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
-        self.spin_exclude_short_songs.setSuffix(" seconds")
-        self.spin_exclude_short_songs.setValue(stored_exclude_short)
-        self._on_short_song_threshold_changed(self.spin_exclude_short_songs.value())
+        self._short_song_seconds = stored_exclude_short
+        self._set_short_song_spinbox_display_from_seconds(self._short_song_seconds)
 
         if self.settings.contains("exclude_long_songs_minutes"):
             stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
@@ -1816,17 +1815,72 @@ class MainWindow(QMainWindow):
         self.settings.setValue("exclude_memes", state == Qt.Checked)
         self._refresh_library_view()
 
-    def _on_short_song_threshold_changed(self, value: int) -> None:
-        """Update the short-song suffix to reflect seconds versus minutes."""
+    def _set_short_song_spinbox_display_from_seconds(self, total_seconds: int) -> None:
+        """Normalize the short-song spin box to show seconds or minutes."""
         if not hasattr(self, "spin_exclude_short_songs"):
             return
-        suffix = " seconds" if value < 60 else " minutes"
-        if self.spin_exclude_short_songs.suffix() != suffix:
-            self.spin_exclude_short_songs.setSuffix(suffix)
+        try:
+            seconds = int(total_seconds)
+        except (TypeError, ValueError):
+            seconds = 30
+        seconds = max(5, min(600, seconds))
+        spin = self.spin_exclude_short_songs
+        was_blocked = spin.blockSignals(True)
+        if seconds >= 60:
+            minutes = max(1, min(seconds // 60, 10))
+            self._short_song_seconds = minutes * 60
+            spin.setRange(0, 10)
+            spin.setSingleStep(1)
+            spin.setSuffix(" minutes")
+            spin.setValue(minutes)
+            spin.setProperty("_short_song_unit", "minutes")
+        else:
+            if seconds % 5:
+                seconds = max(5, min(60, seconds - (seconds % 5)))
+            self._short_song_seconds = seconds
+            spin.setRange(5, 60)
+            spin.setSingleStep(5)
+            spin.setSuffix(" seconds")
+            spin.setValue(seconds)
+            spin.setProperty("_short_song_unit", "seconds")
+        spin.blockSignals(was_blocked)
+
+    def _on_short_song_threshold_changed(self, value: int) -> None:
+        """Keep the short-song threshold consistent when crossing unit boundaries."""
+        if not hasattr(self, "spin_exclude_short_songs"):
+            return
+        spin = self.spin_exclude_short_songs
+        unit = spin.property("_short_song_unit") or "seconds"
+        if unit == "minutes":
+            if value <= 0:
+                self._set_short_song_spinbox_display_from_seconds(55)
+                return
+            seconds = min(value * 60, 600)
+            if seconds < 60:
+                self._set_short_song_spinbox_display_from_seconds(55)
+            elif seconds != self._short_song_seconds:
+                self._short_song_seconds = seconds
+        else:
+            seconds = max(5, min(600, value))
+            if seconds >= 60:
+                self._set_short_song_spinbox_display_from_seconds(seconds)
+            else:
+                if seconds % 5:
+                    seconds = seconds - (seconds % 5)
+                    seconds = max(5, seconds)
+                    if seconds != value:
+                        self._set_short_song_spinbox_display_from_seconds(seconds)
+                        return
+                if seconds != self._short_song_seconds:
+                    self._short_song_seconds = seconds
 
     def _on_exclude_short_songs_changed(self, value: int) -> None:
-        """Persist the short-song cutoff and refresh the library."""
-        self.settings.setValue("exclude_short_songs_seconds", value)
+        """Persist the short-song cutoff (in seconds) and refresh the library."""
+        seconds = getattr(self, "_short_song_seconds", None)
+        if seconds is None:
+            unit = self.spin_exclude_short_songs.property("_short_song_unit") if hasattr(self, "spin_exclude_short_songs") else "seconds"
+            seconds = value * 60 if unit == "minutes" else value
+        self.settings.setValue("exclude_short_songs_seconds", seconds)
         self._refresh_library_view()
 
     def _on_exclude_long_songs_changed(self, value: int) -> None:
@@ -2199,8 +2253,17 @@ class MainWindow(QMainWindow):
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
         short_song_cutoff = (
-            self.spin_exclude_short_songs.value() if hasattr(self, "spin_exclude_short_songs") else 30
+            getattr(self, "_short_song_seconds", None)
+            if hasattr(self, "spin_exclude_short_songs")
+            else None
         )
+        if short_song_cutoff is None:
+            if hasattr(self, "spin_exclude_short_songs"):
+                unit = self.spin_exclude_short_songs.property("_short_song_unit") or "seconds"
+                raw_value = self.spin_exclude_short_songs.value()
+                short_song_cutoff = raw_value * 60 if unit == "minutes" else raw_value
+            else:
+                short_song_cutoff = 30
         long_song_cutoff = (
             self.spin_exclude_long_charts.value() if hasattr(self, "spin_exclude_long_charts") else 60
         )
