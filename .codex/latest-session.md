@@ -21,8 +21,6 @@ Guarantee the window opens wide enough for all tier columns while preserving lay
 - Adjust `WINDOW_MIN_WIDTH` alongside `TIER_COLUMN_MIN_WIDTH` if future designs introduce more or narrower columns.
 - The scroll area uses `Qt.ScrollBarAsNeeded` only when the width dips below the minimum, preserving the clean appearance under normal sizing.
 ---
----
-
 # Session 20 — 2025-10-04 16:45
 
 ## Topic
@@ -492,4 +490,23 @@ They asked to delete every `box-shadow` declaration from the stylesheet, introdu
 Adjust the `_apply_shadow` parameters per widget to fine-tune elevation; keeping the helper ensures future tweaks avoid duplicating effect setup.
 
 ---
+---
+# Session 21 — 2025-10-05 14:20
+
+## Topic
+Embedded the scan status messaging directly in the workflow card progress bar while adding phase-specific color cues.
+
+## User Desires
+The user wanted the redundant detail label removed so the progress bar itself communicates scan status, with smooth color changes between the library and NPS phases.
+
+## Specifics of User Desires
+They asked for the bar text to show phase-specific messaging (percent for phase one, counts for phase two), to animate from blue to purple when NPS begins, and to keep the card visually compact without modal interruptions.
+
+## Actions Taken
+- Updated `gui.py — ScanCard` to drop the detail label, style the header, host the status text inside the progress bar, and drive a `QVariantAnimation` that blends the chunk color between the blue and purple phase tones.
+- Revised `gui.py — MainWindow` scan lifecycle helpers to feed formatted status strings into the progress bar, remove detail label updates, and ensure completion and cancel flows present inline feedback.
+
+## Helpful Hints
+Whenever new scan states are introduced, wire them through `_set_scan_state` so the progress color animation and inline text formatting stay consistent.
+
 ---
