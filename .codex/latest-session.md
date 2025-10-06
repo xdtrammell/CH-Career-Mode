@@ -665,3 +665,22 @@ They wanted only the tooltip to communicate the helper message, the label to rea
 Future design tweaks should continue to surface supplemental guidance through tooltips to avoid upsetting the tight vertical rhythm established in the Filters `QFormLayout`.
 
 ---
+# Session 29 — 2025-10-06 23:05
+
+## Topic
+Adjusted the Filters tab long-chart control to include a suffix that clarifies the minutes unit per reviewer feedback on the latest pull request.
+
+## User Desires
+The reviewer requested that the duration spin box clearly display the units directly in the control without changing any of the existing filtering behavior or persistence.
+
+## Specifics of User Desires
+They specifically wanted the spin box to append the word "minutes" with proper spacing, inherit the standard styling, and keep the tooltip-driven guidance and current value ranges untouched.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` so `self.spin_exclude_long_charts` calls `setSuffix(" minutes")`, ensuring the numeric value is visually paired with the expected units while retaining the tooltip and signal wiring.
+- Re-ran `python -m compileall ch_career_mode` to confirm the module continues to compile after the suffix adjustment.
+
+## Helpful Hints
+Qt automatically applies the control palette colors to suffix text, so future visual tweaks can rely on stylesheet updates rather than additional code when modifying spin box suffix presentation.
+
+---

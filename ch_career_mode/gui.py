@@ -1021,6 +1021,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setSingleStep(5)
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
+        self.spin_exclude_long_charts.setSuffix(" minutes")
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
