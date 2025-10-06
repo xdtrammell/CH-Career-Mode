@@ -18,11 +18,6 @@ Make the NPS scan status more prominent and associated with the selected directo
 ## Helpful Hints
 - Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
-
----
----
----
-
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
@@ -532,4 +527,221 @@ They asked for the bar text to show phase-specific messaging (percent for phase 
 Whenever new scan states are introduced, wire them through `_set_scan_state` so the progress color animation and inline text formatting stay consistent.
 
 ---
+---
+---
+# Session 22 — 2025-10-06 09:40
+
+## Topic
+Replaced the toolbox accordion with a tabbed workflow surface that aligns with the updated Scan Card layout.
+
+## User Desires
+The user wanted the Filters, Rules, and Advanced controls exposed through a horizontal tab row that matches the workflow card aesthetics while relocating the Clear Cache button into the Advanced tab.
+
+## Specifics of User Desires
+They asked for a VS Code-style tab presentation beneath the Scan Card using the accent underline, a shared card-toned content well with padding and light borders, responsive behavior when the Scan Card collapses, smooth tab transitions, keyboard navigation with Ctrl+Tab, and the Clear Cache action positioned at the bottom of Advanced.
+
+## Actions Taken
+- Added `gui.py — WorkflowTabs` to pair a custom-styled `QTabBar` and `QStackedWidget` with fade transitions, Ctrl+Tab cycling, and shared padding.
+- Updated `gui.py — APP_STYLE_TEMPLATE` to skin the new workflow tab row with accent underlines, hover states, and a matching content panel.
+- Rebuilt `gui.py — MainWindow.__init__` settings construction to load Filters, Rules, and Advanced pages into the new tab container and moved the Clear Cache button inside the Advanced panel spacing.
+
+## Helpful Hints
+Use `WorkflowTabs.addTab` when introducing new workflow panes so they inherit the shared animation and styling, and keep inner page layouts margin-free because the tab panel already applies the 16px padding for consistent spacing.
+---
+# Session 23 — 2025-10-06 12:30
+
+## Topic
+Stabilized the workflow tab fade animation lifecycle introduced in Session 22.
+
+## User Desires
+The user wanted the new tab transitions to avoid crashes by ensuring opacity effects are cleaned up safely between animations.
+
+## Specifics of User Desires
+They requested guard rails around `_animate_to` so that graphics effects are detached before deletion, previously destroyed effects are not referenced, and cleanup handlers survive rapid tab switching.
+
+## Actions Taken
+- Hardened `gui.py — WorkflowTabs._animate_to` to verify animations and graphics effects remain valid with `shiboken6.isValid`, detaching any existing effect from the widget before scheduling deletion.
+- Wrapped the fade animation stop and cleanup routines in `try/except` blocks so repeated transitions cannot raise `RuntimeError` when Qt has already disposed of an object.
+- Ensured the finished callback only clears internal references when they still point at the running animation/effect, preventing double deletions.
+
+## Helpful Hints
+When expanding the tab system with new transitions, reuse the validity checks and widget detachment pattern so that Qt manages the effect lifecycle without unexpected crashes during rapid tab changes.
+# Session 24 — 2025-10-06 15:10
+
+## Topic
+Reordered the workflow settings tabs so the new grouping places tier rules first and moves advanced maintenance into its own pane.
+
+## User Desires
+The user wanted the workflow controls reshuffled into Rules, Filters, and Advanced tabs with updated option groupings that relocate Clear Cache beneath the theme selector.
+
+## Specifics of User Desires
+They specified the Rules tab should lead with tier counts and song allocation, followed by the long-song, difficulty, genre, artist, and NPS weighting toggles; Filters should only expose the meme exclusion toggle and minimum difficulty spinner; Advanced should retain theme selection alongside the Clear Cache action.
+
+## Actions Taken
+- Rebuilt `gui.py — MainWindow.__init__` tab construction so the Rules page now owns the tier counts, grouping checkboxes, and NPS weighting while Filters and Advanced contain only their requested controls.
+- Converted each workflow page to a dedicated `QFormLayout` with uniform 12px margins and 10px spacing to match the refreshed grouping requirements.
+- Verified the Clear Cache button now lives inside the Advanced tab form instead of the outer settings layout while keeping all signal connections intact.
+
+## Helpful Hints
+When adjusting future workflow options, add them through the corresponding `QFormLayout` so padding stays consistent and remember the Rules tab now initializes `self.lbl_artist_limit` for artist limit enable/disable toggling.
+
+---
+# Session 25 — 2025-10-06 17:45
+
+## Topic
+Rebalanced the workflow tab layouts to honor the revised ordering and grouping for Rules and Filters specified after Session 24.
+
+## User Desires
+The user wanted the Rules tab to lead with tier counts, minimum difficulty, and rule toggles while the Filters tab should present the artist cap and meme exclusion options in that order.
+
+## Specifics of User Desires
+They requested Rules contain the tier spin boxes followed by the minimum difficulty control and each checkbox in a precise sequence, and Filters should only include the artist track limit spinner paired with its label before the meme exclusion checkbox.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to rebuild the Rules form rows so tiers, songs per tier, minimum difficulty, and the rule toggles appear exactly in the requested order.
+- Moved `self.lbl_artist_limit` and the artist limit spin box into the Filters form ahead of the meme exclusion checkbox while keeping consistent 12px margins and 10px spacing.
+- Verified that existing signal connections for minimum difficulty, artist limit, and meme exclusion remained intact after the layout adjustments.
+
+## Helpful Hints
+When adjusting these forms in the future, remember that the Rules page now owns the minimum difficulty spinner while the Filters page retains the artist limit label for enable-state toggling in `_apply_artist_mode_state`.
+
+---
+# Session 26 — 2025-10-06 19:05
+
+## Topic
+Adjusted the workflow filters tab to house the long-song toggle per the latest review feedback.
+
+## User Desires
+The user wanted the "Keep > 7:00 out of first two tiers" checkbox relocated from the Rules tab into the Filters tab so related filtering options stay grouped together.
+
+## Specifics of User Desires
+They specified that the long-song checkbox should appear above the existing meme exclusion toggle within the Filters form while leaving all other tab contents unchanged.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` so the Rules form stops adding `self.chk_longrule` and the Filters form inserts it ahead of the meme exclusion checkbox.
+- Verified that the new ordering maintains the shared 12px margins and 10px spacing so layout rhythm remains consistent.
+- Confirmed that the checkbox retains its original signal connection since only its form container changed.
+
+## Helpful Hints
+Future adjustments to filter options should continue to leverage the Filters tab `QFormLayout` so spacing stays uniform, and note that the artist limit label still precedes the long-song rule for clarity.
+
+---
+# Session 27 — 2025-10-06 21:15
+
+## Topic
+Implemented a configurable long-chart exclusion filter inside the Filters workflow tab to satisfy the newest user review request.
+
+## User Desires
+The user wanted an additional spin box in the Filters tab that caps eligible charts by length so extremely long tracks are hidden by default.
+
+## Specifics of User Desires
+They specified adding a minutes-based threshold control after the artist limit spinner, persisting its value with QSettings, and ensuring it immediately affects the eligible library list without hiding songs that lack length metadata.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to create `self.spin_exclude_long_charts`, add the supporting label and helper text to the Filters form, and wire its `valueChanged` signal to a new persistence slot.
+- Implemented `gui.py — MainWindow._on_exclude_long_songs_changed` to save the minutes threshold and trigger `_refresh_library_view`.
+- Expanded `gui.py — MainWindow._eligible_library_songs` to skip songs exceeding the configured duration while leaving metadata-free charts untouched.
+
+## Helpful Hints
+When adjusting filter ordering later, remember the hint label is inserted via an empty-form label row so maintainers should preserve that blank label parameter to keep the helper copy aligned beneath the spin box.
+
+---
+# Session 28 — 2025-10-06 22:10
+
+## Topic
+Addressed review notes for the long-chart filter presentation within the Filters workflow tab.
+
+## User Desires
+The user asked to streamline the UI by removing the inline helper copy under the duration spinner and shortening the accompanying label text while retaining the tooltip guidance.
+
+## Specifics of User Desires
+They wanted only the tooltip to communicate the helper message, the label to read "Exclude charts longer than:", and no other behavioral adjustments to the persistence or filtering logic that was delivered in Session 27.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to delete the helper QLabel row, rely on the spinner tooltip for guidance, and rename the label to the requested wording without altering any value ranges or signal wiring.
+- Verified that the spinner still initializes with the stored QSettings value, retains the tooltip string, and continues to trigger `_on_exclude_long_songs_changed` so filtering remains intact.
+
+## Helpful Hints
+Future design tweaks should continue to surface supplemental guidance through tooltips to avoid upsetting the tight vertical rhythm established in the Filters `QFormLayout`.
+
+---
+# Session 29 — 2025-10-06 23:05
+
+## Topic
+Adjusted the Filters tab long-chart control to include a suffix that clarifies the minutes unit per reviewer feedback on the latest pull request.
+
+## User Desires
+The reviewer requested that the duration spin box clearly display the units directly in the control without changing any of the existing filtering behavior or persistence.
+
+## Specifics of User Desires
+They specifically wanted the spin box to append the word "minutes" with proper spacing, inherit the standard styling, and keep the tooltip-driven guidance and current value ranges untouched.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` so `self.spin_exclude_long_charts` calls `setSuffix(" minutes")`, ensuring the numeric value is visually paired with the expected units while retaining the tooltip and signal wiring.
+- Re-ran `python -m compileall ch_career_mode` to confirm the module continues to compile after the suffix adjustment.
+
+## Helpful Hints
+Qt automatically applies the control palette colors to suffix text, so future visual tweaks can rely on stylesheet updates rather than additional code when modifying spin box suffix presentation.
+
+---
+# Session 30 — 2025-10-07 00:45
+
+## Topic
+Implemented the short-song filter control within the Filters workflow tab alongside dynamic unit messaging updates.
+
+## User Desires
+The user wanted a new filter to skip abnormally short charts while keeping the existing long-chart filter and meme toggle consistent with the refreshed layout.
+
+## Specifics of User Desires
+They requested a seconds-based spin box that automatically switches its suffix to minutes past the one-minute mark, persists through QSettings, and applies immediately during library scans without altering previously delivered behaviors.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to instantiate `self.spin_exclude_short_songs`, wire tooltip-rich persistence, and insert the control above the long-chart option in the Filters `QFormLayout`.
+- Connected the new spin box to `_on_short_song_threshold_changed` for suffix swapping and `_on_exclude_short_songs_changed` for QSettings storage plus live library refreshes.
+- Extended `gui.py — MainWindow._eligible_library_songs` to reject songs shorter than the configured threshold prior to the long-chart check, ensuring the new setting affects tiering and previews immediately.
+
+## Helpful Hints
+The short-song suffix toggling relies on `QSpinBox.setSuffix`, so future localization work should update both the seconds and minutes strings together to keep the UI consistent.
+
+---
+# Session 31 — 2025-10-07 01:30
+
+## Topic
+Reworked the short-song filter spin box to convert between seconds and minutes while keeping persistence in raw seconds.
+
+## User Desires
+The reviewer wanted the UI to translate the threshold value when crossing the one-minute boundary so the display shows minutes instead of an inflated seconds count, all without breaking saved preferences or filtering behavior.
+
+## Specifics of User Desires
+They requested that increments past sixty seconds rewrite the displayed number as whole minutes, decrements below one minute revert to seconds, signals avoid double-firing during conversions, and internal logic always reason about the cutoff in total seconds.
+
+## Actions Taken
+- Added `gui.py — MainWindow._set_short_song_spinbox_display_from_seconds` to centralize range, suffix, and value adjustments while updating a `_short_song_seconds` cache used by other handlers.
+- Updated `gui.py — MainWindow._on_short_song_threshold_changed` to trigger conversions in both directions with signal blocking and to normalize keyboard edits onto supported increments.
+- Adjusted `gui.py — MainWindow._on_exclude_short_songs_changed` and `_eligible_library_songs` so persistence and filtering consistently consume the cached seconds value rather than the visual unit.
+- Ran `python -m compileall ch_career_mode` to verify the GUI module still compiles after the refactor.
+
+## Helpful Hints
+When extending these filters, prefer reading `_short_song_seconds` for the authoritative threshold since the spin box may be presenting either minutes or seconds depending on the current value.
+
+---
+# Session 32 — 2025-10-06 09:28
+
+## Topic
+Reaffirmed the short-song filter default so the spinner initializes at thirty seconds before applying saved preferences.
+
+## User Desires
+The reviewer noted the new conversion logic made the filter start at one minute and asked for the control to open on the expected 30-second default.
+
+## Specifics of User Desires
+They wanted the Filters tab spin box to display "30 seconds" on launch unless a prior session stored an alternate threshold, ensuring newcomers see the intended baseline.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to seed `_short_song_seconds` with the 30-second default, render that state immediately, and then layer any stored preference on top.
+- Persisted the default threshold to QSettings when no prior value exists so future runs stay aligned with the intended baseline without overriding existing choices.
+- Recompiled the GUI module via `python -m compileall ch_career_mode` to confirm the refactor introduces no syntax regressions.
+
+## Helpful Hints
+When adding more unit-aware filters, initialize widgets with their canonical defaults before reading settings so the UI renders a predictable baseline even if persistence data is missing or malformed.
+
 ---

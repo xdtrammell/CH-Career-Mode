@@ -17,6 +17,7 @@ from PySide6.QtCore import (
     Signal,
     QEasingCurve,
     QVariantAnimation,
+    QPropertyAnimation,
 )
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -42,14 +43,17 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QStyle,
-QFrame,
-QGraphicsDropShadowEffect,
-QProgressBar,
-QToolBox,
-QToolButton,
-QScrollBar,
-QLayout,
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
+    QProgressBar,
+    QTabBar,
+    QToolButton,
+    QScrollBar,
+    QLayout,
+    QStackedWidget,
 )
+import shiboken6
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
 from .scanner import ScanWorker, get_cache_path
@@ -224,19 +228,40 @@ QFrame#scanProgress, QFrame#folderCard {{
     padding: 12px;
 }}
 
-QToolBox::tab {{
-    background-color: #141823;
+QFrame#workflowTabs {{
+    background-color: transparent;
+}}
+QTabBar#workflowTabBar {{
+    background-color: transparent;
     border: none;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin: 2px 12px 4px 12px;
+}}
+QTabBar#workflowTabBar::tab {{
+    background-color: transparent;
+    color: rgba(244, 246, 251, 0.6);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px 12px;
+    margin: 0 8px 0 0;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+}}
+QTabBar#workflowTabBar::tab:selected {{
+    color: #f4f6fb;
     font-weight: 600;
+    background-color: rgba(94, 129, 255, 0.18);
+    border-bottom-color: {accent};
 }}
-QToolBox::tab:selected {{
-    background-color: rgba(94, 129, 255, 0.25);
+QTabBar#workflowTabBar::tab:hover {{
+    color: rgba(244, 246, 251, 0.85);
+    background-color: rgba(94, 129, 255, 0.12);
 }}
-QToolBox::tab:hover {{
-    background-color: rgba(94, 129, 255, 0.35);
+QTabBar#workflowTabBar::tab:!selected {{
+    margin-top: 2px;
+}}
+QFrame#workflowTabPanel {{
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }}
 
 QPushButton {{
@@ -653,6 +678,169 @@ class ScanCard(QFrame):
         super().keyPressEvent(event)
 
 
+class WorkflowTabs(QFrame):
+    """A modern tab container for the workflow settings stack."""
+
+    currentChanged = Signal(int)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("workflowTabs")
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        self._tab_bar = QTabBar(self)
+        self._tab_bar.setObjectName("workflowTabBar")
+        self._tab_bar.setDrawBase(False)
+        self._tab_bar.setUsesScrollButtons(False)
+        self._tab_bar.setExpanding(False)
+        self._tab_bar.setMovable(False)
+        self._tab_bar.setFocusPolicy(Qt.TabFocus)
+        self._tab_bar.setCursor(Qt.PointingHandCursor)
+        layout.addWidget(self._tab_bar)
+
+        self._panel = QFrame(self)
+        self._panel.setObjectName("workflowTabPanel")
+        self._panel.setAttribute(Qt.WA_StyledBackground, True)
+        self._panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        panel_layout = QVBoxLayout(self._panel)
+        panel_layout.setContentsMargins(16, 16, 16, 16)
+        panel_layout.setSpacing(0)
+
+        self._stack = QStackedWidget(self._panel)
+        self._stack.setObjectName("workflowTabStack")
+        self._stack.setContentsMargins(0, 0, 0, 0)
+        panel_layout.addWidget(self._stack)
+
+        layout.addWidget(self._panel, 1)
+
+        self._current_animation: Optional[QPropertyAnimation] = None
+        self._current_effect: Optional[QGraphicsOpacityEffect] = None
+
+        self._tab_bar.currentChanged.connect(self._on_tab_changed)
+        self._stack.currentChanged.connect(self._animate_to)
+
+    def addTab(self, widget: QWidget, label: str) -> int:
+        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        index = self._stack.addWidget(widget)
+        tab_index = self._tab_bar.addTab(label)
+        self._tab_bar.setTabData(tab_index, index)
+        if self._tab_bar.count() == 1:
+            self._tab_bar.setCurrentIndex(0)
+        return index
+
+    def setCurrentIndex(self, index: int) -> None:
+        if 0 <= index < self._tab_bar.count():
+            if self._tab_bar.currentIndex() != index:
+                self._tab_bar.setCurrentIndex(index)
+            else:
+                self._stack.setCurrentIndex(index)
+
+    def currentIndex(self) -> int:
+        return self._tab_bar.currentIndex()
+
+    def keyPressEvent(self, event) -> None:
+        if event.modifiers() & Qt.ControlModifier and event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            count = self._tab_bar.count()
+            if count:
+                current = self._tab_bar.currentIndex()
+                step = -1 if (event.key() == Qt.Key_Backtab or event.modifiers() & Qt.ShiftModifier) else 1
+                self.setCurrentIndex((current + step) % count)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _on_tab_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        self._stack.setCurrentIndex(index)
+        self.currentChanged.emit(index)
+
+    def _animate_to(self, index: int) -> None:
+        widget = self._stack.widget(index)
+        if widget is None:
+            return
+        if self._current_animation is not None and shiboken6.isValid(self._current_animation):
+            try:
+                self._current_animation.stop()
+            except RuntimeError:
+                pass
+            try:
+                self._current_animation.deleteLater()
+            except RuntimeError:
+                pass
+        self._current_animation = None
+        if self._current_effect is not None and shiboken6.isValid(self._current_effect):
+            try:
+                target = self._current_effect.parent()
+            except RuntimeError:
+                target = None
+            if isinstance(target, QWidget):
+                try:
+                    if target.graphicsEffect() == self._current_effect:
+                        target.setGraphicsEffect(None)
+                except RuntimeError:
+                    pass
+            try:
+                self._current_effect.deleteLater()
+            except RuntimeError:
+                pass
+        self._current_effect = None
+
+        existing_effect = widget.graphicsEffect()
+        if existing_effect is not None and shiboken6.isValid(existing_effect):
+            try:
+                widget.setGraphicsEffect(None)
+                existing_effect.deleteLater()
+            except RuntimeError:
+                pass
+
+        effect = QGraphicsOpacityEffect(widget)
+        effect.setOpacity(0.0)
+        widget.setGraphicsEffect(effect)
+        animation = QPropertyAnimation(effect, b"opacity", self)
+        animation.setDuration(180)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.InOutCubic)
+
+        def _cleanup() -> None:
+            try:
+                if shiboken6.isValid(effect):
+                    target_widget = effect.parent()
+                    if isinstance(target_widget, QWidget):
+                        try:
+                            if target_widget.graphicsEffect() == effect:
+                                target_widget.setGraphicsEffect(None)
+                        except RuntimeError:
+                            pass
+                    effect.deleteLater()
+            except RuntimeError:
+                pass
+
+            if self._current_effect is effect:
+                self._current_effect = None
+
+            try:
+                if shiboken6.isValid(animation):
+                    animation.deleteLater()
+            except RuntimeError:
+                pass
+
+            if self._current_animation is animation:
+                self._current_animation = None
+
+        animation.finished.connect(_cleanup)
+        animation.start()
+
+        self._current_effect = effect
+        self._current_animation = animation
+
+
 class CompactItemDelegate(QStyledItemDelegate):
     """Item delegate that keeps QListWidget rows compact."""
 
@@ -818,6 +1006,41 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
+
+        self.spin_exclude_short_songs = QSpinBox()
+        self.spin_exclude_short_songs.setRange(5, 600)
+        self.spin_exclude_short_songs.setSingleStep(5)
+        self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
+        default_short_seconds = 30
+        raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
+        has_short_setting = self.settings.contains("exclude_short_songs_seconds")
+        try:
+            stored_exclude_short = int(raw_short_setting)
+        except (TypeError, ValueError):
+            stored_exclude_short = default_short_seconds
+        stored_exclude_short = max(5, min(600, stored_exclude_short))
+        self._short_song_seconds = default_short_seconds
+        self._set_short_song_spinbox_display_from_seconds(self._short_song_seconds)
+        if has_short_setting:
+            self._set_short_song_spinbox_display_from_seconds(stored_exclude_short)
+        else:
+            self.settings.setValue("exclude_short_songs_seconds", self._short_song_seconds)
+
+        if self.settings.contains("exclude_long_songs_minutes"):
+            stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
+        else:
+            stored_exclude_minutes = 60
+        try:
+            stored_exclude_minutes = int(stored_exclude_minutes)
+        except (TypeError, ValueError):
+            stored_exclude_minutes = 60
+        stored_exclude_minutes = max(5, min(300, stored_exclude_minutes))
+        self.spin_exclude_long_charts = QSpinBox()
+        self.spin_exclude_long_charts.setRange(5, 300)
+        self.spin_exclude_long_charts.setSingleStep(5)
+        self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
+        self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
+        self.spin_exclude_long_charts.setSuffix(" minutes")
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1064,42 +1287,45 @@ class MainWindow(QMainWindow):
         settings_layout.addWidget(self.scan_card)
         self._set_scan_state(SCAN_IDLE)
 
-        self.settings_toolbox = QToolBox()
-
-        filters_page = QWidget()
-        filters_form = QFormLayout(filters_page)
-        filters_form.setContentsMargins(12, 12, 12, 12)
-        filters_form.setSpacing(10)
-        filters_form.addRow("Minimum difficulty:", self.spin_min_diff)
-        filters_form.addRow(self.chk_exclude_meme)
-        filters_form.addRow(self.chk_group_genre)
-        filters_form.addRow(self.chk_artist_career_mode)
+        self.settings_tabs = WorkflowTabs()
 
         rules_page = QWidget()
         rules_form = QFormLayout(rules_page)
         rules_form.setContentsMargins(12, 12, 12, 12)
         rules_form.setSpacing(10)
-        rules_form.addRow(self.chk_longrule)
-        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
-        rules_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
+        rules_form.addRow("Tiers:", self.spin_tiers)
+        rules_form.addRow("Songs per tier:", self.spin_songs_per)
+        rules_form.addRow("Minimum difficulty:", self.spin_min_diff)
         rules_form.addRow(self.chk_lower_official)
+        rules_form.addRow(self.chk_weight_nps)
+        rules_form.addRow(self.chk_group_genre)
+        rules_form.addRow(self.chk_artist_career_mode)
+
+        filters_page = QWidget()
+        filters_form = QFormLayout(filters_page)
+        filters_form.setContentsMargins(12, 12, 12, 12)
+        filters_form.setSpacing(10)
+        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
+        filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
+        self.lbl_exclude_short_songs = QLabel("Exclude charts shorter than:")
+        filters_form.addRow(self.lbl_exclude_short_songs, self.spin_exclude_short_songs)
+        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
+        filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
+        filters_form.addRow(self.chk_exclude_meme)
+        filters_form.addRow(self.chk_longrule)
 
         advanced_page = QWidget()
         advanced_form = QFormLayout(advanced_page)
         advanced_form.setContentsMargins(12, 12, 12, 12)
         advanced_form.setSpacing(10)
-        advanced_form.addRow("Tiers:", self.spin_tiers)
-        advanced_form.addRow("Songs per tier:", self.spin_songs_per)
         advanced_form.addRow("Theme:", self.theme_combo)
-        advanced_form.addRow(self.chk_weight_nps)
+        advanced_form.addRow(self.btn_clear_cache)
 
-        self.settings_toolbox.addItem(filters_page, "Filters")
-        self.settings_toolbox.addItem(rules_page, "Rules")
-        self.settings_toolbox.addItem(advanced_page, "Advanced")
-        settings_layout.addWidget(self.settings_toolbox)
-
-        settings_layout.addStretch(1)
-        settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
+        self.settings_tabs.addTab(rules_page, "Rules")
+        self.settings_tabs.addTab(filters_page, "Filters")
+        self.settings_tabs.addTab(advanced_page, "Advanced")
+        settings_layout.addWidget(self.settings_tabs, 1)
+        self.settings_tabs.setCurrentIndex(0)
 
         self._apply_shadow(library_card, blur=16, y=1, alpha=80)
         self._apply_shadow(self.settings_box, blur=16, y=1, alpha=80)
@@ -1131,6 +1357,9 @@ class MainWindow(QMainWindow):
         self.chk_group_genre.stateChanged.connect(self._on_group_genre_changed)
         self.chk_artist_career_mode.stateChanged.connect(self._on_artist_career_mode_changed)
         self.chk_exclude_meme.stateChanged.connect(self._on_exclude_meme_changed)
+        self.spin_exclude_short_songs.valueChanged.connect(self._on_short_song_threshold_changed)
+        self.spin_exclude_short_songs.valueChanged.connect(self._on_exclude_short_songs_changed)
+        self.spin_exclude_long_charts.valueChanged.connect(self._on_exclude_long_songs_changed)
         self.chk_lower_official.stateChanged.connect(self._on_lower_official_changed)
         self.chk_weight_nps.stateChanged.connect(self._on_weight_by_nps_changed)
         self.spin_artist_limit.valueChanged.connect(self._on_artist_limit_changed)
@@ -1589,6 +1818,79 @@ class MainWindow(QMainWindow):
         self.settings.setValue("exclude_memes", state == Qt.Checked)
         self._refresh_library_view()
 
+    def _set_short_song_spinbox_display_from_seconds(self, total_seconds: int) -> None:
+        """Normalize the short-song spin box to show seconds or minutes."""
+        if not hasattr(self, "spin_exclude_short_songs"):
+            return
+        try:
+            seconds = int(total_seconds)
+        except (TypeError, ValueError):
+            seconds = 30
+        seconds = max(5, min(600, seconds))
+        spin = self.spin_exclude_short_songs
+        was_blocked = spin.blockSignals(True)
+        if seconds >= 60:
+            minutes = max(1, min(seconds // 60, 10))
+            self._short_song_seconds = minutes * 60
+            spin.setRange(0, 10)
+            spin.setSingleStep(1)
+            spin.setSuffix(" minutes")
+            spin.setValue(minutes)
+            spin.setProperty("_short_song_unit", "minutes")
+        else:
+            if seconds % 5:
+                seconds = max(5, min(60, seconds - (seconds % 5)))
+            self._short_song_seconds = seconds
+            spin.setRange(5, 60)
+            spin.setSingleStep(5)
+            spin.setSuffix(" seconds")
+            spin.setValue(seconds)
+            spin.setProperty("_short_song_unit", "seconds")
+        spin.blockSignals(was_blocked)
+
+    def _on_short_song_threshold_changed(self, value: int) -> None:
+        """Keep the short-song threshold consistent when crossing unit boundaries."""
+        if not hasattr(self, "spin_exclude_short_songs"):
+            return
+        spin = self.spin_exclude_short_songs
+        unit = spin.property("_short_song_unit") or "seconds"
+        if unit == "minutes":
+            if value <= 0:
+                self._set_short_song_spinbox_display_from_seconds(55)
+                return
+            seconds = min(value * 60, 600)
+            if seconds < 60:
+                self._set_short_song_spinbox_display_from_seconds(55)
+            elif seconds != self._short_song_seconds:
+                self._short_song_seconds = seconds
+        else:
+            seconds = max(5, min(600, value))
+            if seconds >= 60:
+                self._set_short_song_spinbox_display_from_seconds(seconds)
+            else:
+                if seconds % 5:
+                    seconds = seconds - (seconds % 5)
+                    seconds = max(5, seconds)
+                    if seconds != value:
+                        self._set_short_song_spinbox_display_from_seconds(seconds)
+                        return
+                if seconds != self._short_song_seconds:
+                    self._short_song_seconds = seconds
+
+    def _on_exclude_short_songs_changed(self, value: int) -> None:
+        """Persist the short-song cutoff (in seconds) and refresh the library."""
+        seconds = getattr(self, "_short_song_seconds", None)
+        if seconds is None:
+            unit = self.spin_exclude_short_songs.property("_short_song_unit") if hasattr(self, "spin_exclude_short_songs") else "seconds"
+            seconds = value * 60 if unit == "minutes" else value
+        self.settings.setValue("exclude_short_songs_seconds", seconds)
+        self._refresh_library_view()
+
+    def _on_exclude_long_songs_changed(self, value: int) -> None:
+        """Persist the long-chart cutoff and refresh the library."""
+        self.settings.setValue("exclude_long_songs_minutes", value)
+        self._refresh_library_view()
+
     def _on_lower_official_changed(self, state: int) -> None:
         """Persist the Harmonix/Neversoft adjustment preference and refresh."""
         self.settings.setValue("lower_official", state == Qt.Checked)
@@ -1953,6 +2255,21 @@ class MainWindow(QMainWindow):
         weight_by_nps = self._weight_by_nps_enabled()
         min_diff = self.spin_min_diff.value() if hasattr(self, "spin_min_diff") else 1
         exclude_memes = self.chk_exclude_meme.isChecked() if hasattr(self, "chk_exclude_meme") else False
+        short_song_cutoff = (
+            getattr(self, "_short_song_seconds", None)
+            if hasattr(self, "spin_exclude_short_songs")
+            else None
+        )
+        if short_song_cutoff is None:
+            if hasattr(self, "spin_exclude_short_songs"):
+                unit = self.spin_exclude_short_songs.property("_short_song_unit") or "seconds"
+                raw_value = self.spin_exclude_short_songs.value()
+                short_song_cutoff = raw_value * 60 if unit == "minutes" else raw_value
+            else:
+                short_song_cutoff = 30
+        long_song_cutoff = (
+            self.spin_exclude_long_charts.value() if hasattr(self, "spin_exclude_long_charts") else 60
+        )
         query = ""
         if apply_search_filter and hasattr(self, "search_box"):
             query = self.search_box.text().casefold().strip()
@@ -1975,6 +2292,10 @@ class MainWindow(QMainWindow):
                 continue
             genre_key = (song.genre or "").strip().lower()
             if exclude_memes and genre_key in MEME_GENRES:
+                continue
+            if song.length_ms and song.length_ms < short_song_cutoff * 1000:
+                continue
+            if song.length_ms and song.length_ms > long_song_cutoff * 60_000:
                 continue
             if apply_search_filter and not matches_query(song):
                 continue
