@@ -646,3 +646,22 @@ They specified adding a minutes-based threshold control after the artist limit s
 When adjusting filter ordering later, remember the hint label is inserted via an empty-form label row so maintainers should preserve that blank label parameter to keep the helper copy aligned beneath the spin box.
 
 ---
+# Session 28 — 2025-10-06 22:10
+
+## Topic
+Addressed review notes for the long-chart filter presentation within the Filters workflow tab.
+
+## User Desires
+The user asked to streamline the UI by removing the inline helper copy under the duration spinner and shortening the accompanying label text while retaining the tooltip guidance.
+
+## Specifics of User Desires
+They wanted only the tooltip to communicate the helper message, the label to read "Exclude charts longer than:", and no other behavioral adjustments to the persistence or filtering logic that was delivered in Session 27.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to delete the helper QLabel row, rely on the spinner tooltip for guidance, and rename the label to the requested wording without altering any value ranges or signal wiring.
+- Verified that the spinner still initializes with the stored QSettings value, retains the tooltip string, and continues to trigger `_on_exclude_long_songs_changed` so filtering remains intact.
+
+## Helpful Hints
+Future design tweaks should continue to surface supplemental guidance through tooltips to avoid upsetting the tight vertical rhythm established in the Filters `QFormLayout`.
+
+---

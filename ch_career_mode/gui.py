@@ -1020,7 +1020,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setRange(5, 300)
         self.spin_exclude_long_charts.setSingleStep(5)
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
-        self.spin_exclude_long_charts.setToolTip("Useful for excluding concerts or movie charts.")
+        self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1287,11 +1287,8 @@ class MainWindow(QMainWindow):
         filters_form.setSpacing(10)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than (minutes):")
+        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
-        self.lbl_exclude_long_hint = QLabel("(Useful for filtering out full-length concerts or movie charts.)")
-        self.lbl_exclude_long_hint.setWordWrap(True)
-        filters_form.addRow("", self.lbl_exclude_long_hint)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_longrule)
 
