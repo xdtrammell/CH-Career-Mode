@@ -18,11 +18,6 @@ Make the NPS scan status more prominent and associated with the selected directo
 ## Helpful Hints
 - Signals `nps_progress`, `nps_update`, and `nps_done` already manage state changes; only widget placement and behavior need adjustment.
 ---
-
----
----
----
-
 # Session 2 — 2025-09-25 10:13
 
 ## Topic
@@ -589,5 +584,25 @@ They specified the Rules tab should lead with tier counts and song allocation, f
 
 ## Helpful Hints
 When adjusting future workflow options, add them through the corresponding `QFormLayout` so padding stays consistent and remember the Rules tab now initializes `self.lbl_artist_limit` for artist limit enable/disable toggling.
+
+---
+# Session 25 — 2025-10-06 17:45
+
+## Topic
+Rebalanced the workflow tab layouts to honor the revised ordering and grouping for Rules and Filters specified after Session 24.
+
+## User Desires
+The user wanted the Rules tab to lead with tier counts, minimum difficulty, and rule toggles while the Filters tab should present the artist cap and meme exclusion options in that order.
+
+## Specifics of User Desires
+They requested Rules contain the tier spin boxes followed by the minimum difficulty control and each checkbox in a precise sequence, and Filters should only include the artist track limit spinner paired with its label before the meme exclusion checkbox.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` to rebuild the Rules form rows so tiers, songs per tier, minimum difficulty, and the rule toggles appear exactly in the requested order.
+- Moved `self.lbl_artist_limit` and the artist limit spin box into the Filters form ahead of the meme exclusion checkbox while keeping consistent 12px margins and 10px spacing.
+- Verified that existing signal connections for minimum difficulty, artist limit, and meme exclusion remained intact after the layout adjustments.
+
+## Helpful Hints
+When adjusting these forms in the future, remember that the Rules page now owns the minimum difficulty spinner while the Filters page retains the artist limit label for enable-state toggling in `_apply_artist_mode_state`.
 
 ---
