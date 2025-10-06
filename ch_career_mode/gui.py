@@ -17,6 +17,7 @@ from PySide6.QtCore import (
     Signal,
     QEasingCurve,
     QVariantAnimation,
+    QPropertyAnimation,
 )
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
@@ -42,13 +43,15 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QSizePolicy,
     QStyle,
-QFrame,
-QGraphicsDropShadowEffect,
-QProgressBar,
-QToolBox,
-QToolButton,
-QScrollBar,
-QLayout,
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QGraphicsOpacityEffect,
+    QProgressBar,
+    QTabBar,
+    QToolButton,
+    QScrollBar,
+    QLayout,
+    QStackedWidget,
 )
 
 from .core import Song, strip_color_tags, effective_score, effective_diff
@@ -224,19 +227,40 @@ QFrame#scanProgress, QFrame#folderCard {{
     padding: 12px;
 }}
 
-QToolBox::tab {{
-    background-color: #141823;
+QFrame#workflowTabs {{
+    background-color: transparent;
+}}
+QTabBar#workflowTabBar {{
+    background-color: transparent;
     border: none;
-    border-radius: 10px;
-    padding: 10px 14px;
-    margin: 2px 12px 4px 12px;
+}}
+QTabBar#workflowTabBar::tab {{
+    background-color: transparent;
+    color: rgba(244, 246, 251, 0.6);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px 12px;
+    margin: 0 8px 0 0;
+    border-bottom: 3px solid transparent;
+    font-weight: 500;
+}}
+QTabBar#workflowTabBar::tab:selected {{
+    color: #f4f6fb;
     font-weight: 600;
+    background-color: rgba(94, 129, 255, 0.18);
+    border-bottom-color: {accent};
 }}
-QToolBox::tab:selected {{
-    background-color: rgba(94, 129, 255, 0.25);
+QTabBar#workflowTabBar::tab:hover {{
+    color: rgba(244, 246, 251, 0.85);
+    background-color: rgba(94, 129, 255, 0.12);
 }}
-QToolBox::tab:hover {{
-    background-color: rgba(94, 129, 255, 0.35);
+QTabBar#workflowTabBar::tab:!selected {{
+    margin-top: 2px;
+}}
+QFrame#workflowTabPanel {{
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }}
 
 QPushButton {{
@@ -653,6 +677,128 @@ class ScanCard(QFrame):
         super().keyPressEvent(event)
 
 
+class WorkflowTabs(QFrame):
+    """A modern tab container for the workflow settings stack."""
+
+    currentChanged = Signal(int)
+
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("workflowTabs")
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        self._tab_bar = QTabBar(self)
+        self._tab_bar.setObjectName("workflowTabBar")
+        self._tab_bar.setDrawBase(False)
+        self._tab_bar.setUsesScrollButtons(False)
+        self._tab_bar.setExpanding(False)
+        self._tab_bar.setMovable(False)
+        self._tab_bar.setFocusPolicy(Qt.TabFocus)
+        self._tab_bar.setCursor(Qt.PointingHandCursor)
+        layout.addWidget(self._tab_bar)
+
+        self._panel = QFrame(self)
+        self._panel.setObjectName("workflowTabPanel")
+        self._panel.setAttribute(Qt.WA_StyledBackground, True)
+        self._panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        panel_layout = QVBoxLayout(self._panel)
+        panel_layout.setContentsMargins(16, 16, 16, 16)
+        panel_layout.setSpacing(0)
+
+        self._stack = QStackedWidget(self._panel)
+        self._stack.setObjectName("workflowTabStack")
+        self._stack.setContentsMargins(0, 0, 0, 0)
+        panel_layout.addWidget(self._stack)
+
+        layout.addWidget(self._panel, 1)
+
+        self._current_animation: Optional[QPropertyAnimation] = None
+        self._current_effect: Optional[QGraphicsOpacityEffect] = None
+
+        self._tab_bar.currentChanged.connect(self._on_tab_changed)
+        self._stack.currentChanged.connect(self._animate_to)
+
+    def addTab(self, widget: QWidget, label: str) -> int:
+        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        index = self._stack.addWidget(widget)
+        tab_index = self._tab_bar.addTab(label)
+        self._tab_bar.setTabData(tab_index, index)
+        if self._tab_bar.count() == 1:
+            self._tab_bar.setCurrentIndex(0)
+        return index
+
+    def setCurrentIndex(self, index: int) -> None:
+        if 0 <= index < self._tab_bar.count():
+            if self._tab_bar.currentIndex() != index:
+                self._tab_bar.setCurrentIndex(index)
+            else:
+                self._stack.setCurrentIndex(index)
+
+    def currentIndex(self) -> int:
+        return self._tab_bar.currentIndex()
+
+    def keyPressEvent(self, event) -> None:
+        if event.modifiers() & Qt.ControlModifier and event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            count = self._tab_bar.count()
+            if count:
+                current = self._tab_bar.currentIndex()
+                step = -1 if (event.key() == Qt.Key_Backtab or event.modifiers() & Qt.ShiftModifier) else 1
+                self.setCurrentIndex((current + step) % count)
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _on_tab_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        self._stack.setCurrentIndex(index)
+        self.currentChanged.emit(index)
+
+    def _animate_to(self, index: int) -> None:
+        widget = self._stack.widget(index)
+        if widget is None:
+            return
+        if self._current_animation is not None:
+            self._current_animation.stop()
+            self._current_animation.deleteLater()
+            self._current_animation = None
+        if self._current_effect is not None:
+            target = self._current_effect.parent()
+            if isinstance(target, QWidget):
+                target.setGraphicsEffect(None)
+            self._current_effect.deleteLater()
+            self._current_effect = None
+
+        effect = QGraphicsOpacityEffect(widget)
+        effect.setOpacity(0.0)
+        widget.setGraphicsEffect(effect)
+        animation = QPropertyAnimation(effect, b"opacity", self)
+        animation.setDuration(180)
+        animation.setStartValue(0.0)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.InOutCubic)
+
+        def _cleanup() -> None:
+            widget.setGraphicsEffect(None)
+            if self._current_effect is not None:
+                self._current_effect.deleteLater()
+                self._current_effect = None
+            if self._current_animation is not None:
+                self._current_animation.deleteLater()
+                self._current_animation = None
+
+        animation.finished.connect(_cleanup)
+        animation.start()
+
+        self._current_effect = effect
+        self._current_animation = animation
+
+
 class CompactItemDelegate(QStyledItemDelegate):
     """Item delegate that keeps QListWidget rows compact."""
 
@@ -1064,42 +1210,57 @@ class MainWindow(QMainWindow):
         settings_layout.addWidget(self.scan_card)
         self._set_scan_state(SCAN_IDLE)
 
-        self.settings_toolbox = QToolBox()
+        self.settings_tabs = WorkflowTabs()
 
         filters_page = QWidget()
-        filters_form = QFormLayout(filters_page)
-        filters_form.setContentsMargins(12, 12, 12, 12)
+        filters_layout = QVBoxLayout(filters_page)
+        filters_layout.setContentsMargins(0, 0, 0, 0)
+        filters_layout.setSpacing(12)
+        filters_form = QFormLayout()
+        filters_form.setContentsMargins(0, 0, 0, 0)
         filters_form.setSpacing(10)
         filters_form.addRow("Minimum difficulty:", self.spin_min_diff)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_group_genre)
         filters_form.addRow(self.chk_artist_career_mode)
+        filters_layout.addLayout(filters_form)
+        filters_layout.addStretch(1)
 
         rules_page = QWidget()
-        rules_form = QFormLayout(rules_page)
-        rules_form.setContentsMargins(12, 12, 12, 12)
+        rules_layout = QVBoxLayout(rules_page)
+        rules_layout.setContentsMargins(0, 0, 0, 0)
+        rules_layout.setSpacing(12)
+        rules_form = QFormLayout()
+        rules_form.setContentsMargins(0, 0, 0, 0)
         rules_form.setSpacing(10)
         rules_form.addRow(self.chk_longrule)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         rules_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         rules_form.addRow(self.chk_lower_official)
+        rules_layout.addLayout(rules_form)
+        rules_layout.addStretch(1)
 
         advanced_page = QWidget()
-        advanced_form = QFormLayout(advanced_page)
-        advanced_form.setContentsMargins(12, 12, 12, 12)
+        advanced_layout = QVBoxLayout(advanced_page)
+        advanced_layout.setContentsMargins(0, 0, 0, 0)
+        advanced_layout.setSpacing(12)
+        advanced_form = QFormLayout()
+        advanced_form.setContentsMargins(0, 0, 0, 0)
         advanced_form.setSpacing(10)
         advanced_form.addRow("Tiers:", self.spin_tiers)
         advanced_form.addRow("Songs per tier:", self.spin_songs_per)
         advanced_form.addRow("Theme:", self.theme_combo)
         advanced_form.addRow(self.chk_weight_nps)
+        advanced_layout.addLayout(advanced_form)
+        advanced_layout.addStretch(1)
+        advanced_layout.addSpacing(6)
+        advanced_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
 
-        self.settings_toolbox.addItem(filters_page, "Filters")
-        self.settings_toolbox.addItem(rules_page, "Rules")
-        self.settings_toolbox.addItem(advanced_page, "Advanced")
-        settings_layout.addWidget(self.settings_toolbox)
-
-        settings_layout.addStretch(1)
-        settings_layout.addWidget(self.btn_clear_cache, 0, Qt.AlignLeft)
+        self.settings_tabs.addTab(filters_page, "Filters")
+        self.settings_tabs.addTab(rules_page, "Rules")
+        self.settings_tabs.addTab(advanced_page, "Advanced")
+        settings_layout.addWidget(self.settings_tabs, 1)
+        self.settings_tabs.setCurrentIndex(0)
 
         self._apply_shadow(library_card, blur=16, y=1, alpha=80)
         self._apply_shadow(self.settings_box, blur=16, y=1, alpha=80)

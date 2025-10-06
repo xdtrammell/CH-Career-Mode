@@ -533,3 +533,22 @@ Whenever new scan states are introduced, wire them through `_set_scan_state` so 
 
 ---
 ---
+---
+# Session 22 — 2025-10-06 09:40
+
+## Topic
+Replaced the toolbox accordion with a tabbed workflow surface that aligns with the updated Scan Card layout.
+
+## User Desires
+The user wanted the Filters, Rules, and Advanced controls exposed through a horizontal tab row that matches the workflow card aesthetics while relocating the Clear Cache button into the Advanced tab.
+
+## Specifics of User Desires
+They asked for a VS Code-style tab presentation beneath the Scan Card using the accent underline, a shared card-toned content well with padding and light borders, responsive behavior when the Scan Card collapses, smooth tab transitions, keyboard navigation with Ctrl+Tab, and the Clear Cache action positioned at the bottom of Advanced.
+
+## Actions Taken
+- Added `gui.py — WorkflowTabs` to pair a custom-styled `QTabBar` and `QStackedWidget` with fade transitions, Ctrl+Tab cycling, and shared padding.
+- Updated `gui.py — APP_STYLE_TEMPLATE` to skin the new workflow tab row with accent underlines, hover states, and a matching content panel.
+- Rebuilt `gui.py — MainWindow.__init__` settings construction to load Filters, Rules, and Advanced pages into the new tab container and moved the Clear Cache button inside the Advanced panel spacing.
+
+## Helpful Hints
+Use `WorkflowTabs.addTab` when introducing new workflow panes so they inherit the shared animation and styling, and keep inner page layouts margin-free because the tab panel already applies the 16px padding for consistent spacing.
