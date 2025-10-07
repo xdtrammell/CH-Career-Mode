@@ -766,3 +766,24 @@ They specified that the action should appear in a custom context menu, rely on e
 The explorer helper prefers real chart files when available, falls back to the song.ini location, and gracefully informs the user when only the containing folder can be opened, so future actions should reuse it for other file-based commands.
 
 ---
+# Session 34 — 2025-10-07 08:12
+
+## Topic
+Eliminated lingering song selections after adding context menus so lists behave like single-selection browsers.
+
+## User Desires
+The user wanted right-click context menus without leaving multiple songs highlighted, expecting only one selection at a time and automatic clearing when focus shifts elsewhere.
+
+## Specifics of User Desires
+They described permanent highlights after the context menu work and asked for library and tier lists to act like standard file explorers: single selection per click, clearing when other lists or empty areas are clicked, and maintaining drag-and-drop functionality.
+
+## Actions Taken
+- Updated `gui.py — MainWindow.__init__` and `_rebuild_tier_widgets` to register every song list with new shared selection-handling helpers and to install a global event filter.
+- Added `gui.py — MainWindow._register_song_list`, `_iter_song_lists`, `_clear_all_song_selections`, `_clear_other_list_selections`, `_on_song_selection_changed`, `_find_song_list_for_widget`, `_ensure_song_item_selected`, and an `eventFilter` override to coordinate single-selection behavior across the library and all tiers.
+- Enhanced `gui.py — MainWindow._on_song_context_menu` so right-clicking selects the target song before showing the menu, preserving the existing context menu workflow.
+- Recompiled the GUI package via `python -m compileall ch_career_mode` to confirm the refactor remains syntax-safe.
+
+## Helpful Hints
+The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
+
+---
