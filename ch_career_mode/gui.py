@@ -3,8 +3,11 @@
 import math
 import os
 import random
+import shutil
+import subprocess
+import sys
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 from dataclasses import replace
 
 from PySide6.QtCore import (
@@ -18,8 +21,11 @@ from PySide6.QtCore import (
     QEasingCurve,
     QVariantAnimation,
     QPropertyAnimation,
+    QPoint,
+    QEvent,
+    QItemSelectionModel,
 )
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -52,6 +58,7 @@ from PySide6.QtWidgets import (
     QScrollBar,
     QLayout,
     QStackedWidget,
+    QMenu,
 )
 import shiboken6
 
@@ -955,6 +962,11 @@ class MainWindow(QMainWindow):
         self._last_scan_song_count = 0
         stored_collapsed = self.settings.value("scan_card_collapsed", True, type=bool)
         self._scan_card_user_collapsed = bool(stored_collapsed)
+        self._suppress_selection_sync = False
+
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
         self.btn_pick = QPushButton("Pick Songs Folder…")
         self.btn_scan = QPushButton("Scan Library")
@@ -1090,12 +1102,14 @@ class MainWindow(QMainWindow):
         self.theme_combo.setCurrentText(saved_theme)
 
         self.lib_list = QListWidget()
-        self.lib_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.lib_list.setDragEnabled(True)
         self.lib_list.setDragDropMode(QAbstractItemView.DragOnly)
         self.lib_list.setDefaultDropAction(Qt.CopyAction)
         self.lib_list.setAcceptDrops(False)
         self.lib_list.library_source = True
+        self.lib_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.lib_list.customContextMenuRequested.connect(self._on_song_context_menu)
+        self._register_song_list(self.lib_list)
         self._list_delegates.append(self._apply_compact_list_style(self.lib_list))
 
         self.tiers_container = QWidget()
@@ -1950,6 +1964,112 @@ class MainWindow(QMainWindow):
         widget.setItemDelegate(delegate)
         return delegate
 
+    def _register_song_list(self, widget: QListWidget) -> None:
+        """Ensure a song list enforces single selection and shared interactions."""
+
+        widget.setSelectionMode(QAbstractItemView.SingleSelection)
+        widget.setSelectionBehavior(QAbstractItemView.SelectItems)
+        widget.setSelectionRectVisible(False)
+        widget.viewport().installEventFilter(self)
+        widget.itemSelectionChanged.connect(lambda w=widget: self._on_song_selection_changed(w))
+
+    def _iter_song_lists(self) -> List[QListWidget]:
+        """Return the current collection of song-bearing list widgets."""
+
+        lists: List[QListWidget] = [self.lib_list]
+        lists.extend(self.tiers_widgets)
+        return lists
+
+    def _on_song_selection_changed(self, source: QListWidget) -> None:
+        """Clear selections from all other lists when one gains a selection."""
+
+        if self._suppress_selection_sync or not source.selectedItems():
+            return
+        self._clear_other_list_selections(source)
+
+    def _clear_other_list_selections(self, active: QListWidget) -> None:
+        """Remove selections from every list except *active*."""
+
+        if self._suppress_selection_sync:
+            return
+        self._suppress_selection_sync = True
+        try:
+            for widget in self._iter_song_lists():
+                if widget is active:
+                    continue
+                widget.clearSelection()
+                widget.setCurrentRow(-1)
+        finally:
+            self._suppress_selection_sync = False
+
+    def _clear_all_song_selections(self) -> None:
+        """Remove highlighted items from every song list."""
+
+        if self._suppress_selection_sync:
+            return
+        self._suppress_selection_sync = True
+        try:
+            for widget in self._iter_song_lists():
+                widget.clearSelection()
+                widget.setCurrentRow(-1)
+        finally:
+            self._suppress_selection_sync = False
+
+    def _find_song_list_for_widget(self, widget: Optional[QWidget]) -> Optional[QListWidget]:
+        """Return the song list that owns *widget*, if any."""
+
+        if widget is None:
+            return None
+        candidates = tuple(self._iter_song_lists())
+        current: Optional[QWidget] = widget
+        while current is not None:
+            for candidate in candidates:
+                if candidate is current:
+                    return candidate
+            current = current.parent()
+        return None
+
+    def _ensure_song_item_selected(self, list_widget: QListWidget, item: QListWidgetItem) -> None:
+        """Select *item* in *list_widget* if it is not already the active row."""
+
+        if item.isSelected() and list_widget.currentItem() is item:
+            return
+        list_widget.setCurrentItem(item, QItemSelectionModel.ClearAndSelect)
+
+    def eventFilter(self, obj, event):  # type: ignore[override]
+        """Globally clear lingering selections when the user clicks elsewhere."""
+
+        if event.type() == QEvent.MouseButtonPress:
+            widget = obj if isinstance(obj, QWidget) else None
+            list_widget = self._find_song_list_for_widget(widget)
+            if list_widget is None:
+                self._clear_all_song_selections()
+            else:
+                if widget is list_widget.viewport():
+                    mouse_event = cast(QMouseEvent, event)
+                    if hasattr(mouse_event, "position"):
+                        pos = mouse_event.position().toPoint()
+                    else:
+                        pos = mouse_event.pos()
+                    item = list_widget.itemAt(pos)
+                    if item is None:
+                        self._clear_all_song_selections()
+                    elif mouse_event.button() == Qt.RightButton:
+                        self._clear_other_list_selections(list_widget)
+                        self._ensure_song_item_selected(list_widget, item)
+                    else:
+                        self._clear_other_list_selections(list_widget)
+                else:
+                    self._clear_other_list_selections(list_widget)
+        elif event.type() == QEvent.FocusIn:
+            widget = obj if isinstance(obj, QWidget) else None
+            list_widget = self._find_song_list_for_widget(widget)
+            if list_widget is None:
+                self._clear_all_song_selections()
+            else:
+                self._clear_other_list_selections(list_widget)
+        return super().eventFilter(obj, event)
+
     def _rebuild_tier_widgets(self) -> None:
         """Create the tier list widgets according to the current tier count."""
         self._list_delegates = self._list_delegates[:1]
@@ -1969,7 +2089,10 @@ class MainWindow(QMainWindow):
         tier_count = self.spin_tiers.value()
         for idx in range(tier_count):
             tier = TierList(self._tier_name(idx), drop_handler=self._handle_library_drop)
+            tier.setContextMenuPolicy(Qt.CustomContextMenu)
+            tier.customContextMenuRequested.connect(self._on_song_context_menu)
             tier.itemDoubleClicked.connect(lambda item, t=tier: self._remove_from_tier(t, item))
+            self._register_song_list(tier)
             self._list_delegates.append(self._apply_compact_list_style(tier, variant="tier"))
             self._sync_tier_height(tier)
 
@@ -2134,6 +2257,107 @@ class MainWindow(QMainWindow):
             if viewport_height > 0 and content_height <= viewport_height:
                 self.tiers_scroll.verticalScrollBar().setValue(0)
         self._sync_external_tier_scrollbar()
+
+    def _on_song_context_menu(self, pos: QPoint) -> None:
+        """Show a context menu for a song item with file actions."""
+
+        source = self.sender()
+        if not isinstance(source, QListWidget):
+            return
+        item = source.itemAt(pos)
+        if item is None:
+            return
+        self._ensure_song_item_selected(source, item)
+        song = item.data(Qt.UserRole)
+        if not isinstance(song, Song):
+            return
+
+        menu = QMenu(source)
+        show_action = menu.addAction("Show in File Explorer")
+        show_action.triggered.connect(lambda _=False, s=song: self._show_in_explorer(s))
+        global_pos = source.mapToGlobal(pos)
+        menu.exec(global_pos)
+
+    def _show_in_explorer(self, song: Song) -> None:
+        """Open the operating system's file browser highlighting the song file."""
+
+        candidates: List[str] = []
+        for attr in ("chart_path", "path"):
+            candidate = getattr(song, attr, None)
+            if candidate:
+                candidates.append(os.path.abspath(candidate))
+
+        if not candidates:
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                "This song does not have a known file location on disk.",
+            )
+            return
+
+        highlight_target = next((path for path in candidates if os.path.isfile(path)), None)
+        directory_candidate: Optional[str] = None
+        if highlight_target:
+            directory_candidate = os.path.dirname(highlight_target)
+        else:
+            for path in candidates:
+                if os.path.isdir(path):
+                    directory_candidate = path
+                    break
+                parent = os.path.dirname(path)
+                if parent and os.path.isdir(parent):
+                    directory_candidate = parent
+                    break
+
+        if not directory_candidate:
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                "Could not locate this song's files. They may have been moved or deleted.",
+            )
+            return
+
+        if highlight_target is None:
+            QMessageBox.warning(
+                self,
+                "File Missing",
+                "The song file could not be found. Opening the containing folder instead.",
+            )
+
+        try:
+            if sys.platform.startswith("win"):
+                if highlight_target and os.path.isfile(highlight_target):
+                    subprocess.Popen(["explorer", "/select,", os.path.normpath(highlight_target)])
+                else:
+                    subprocess.Popen(["explorer", os.path.normpath(directory_candidate)])
+                return
+            if sys.platform.startswith("darwin"):
+                if highlight_target and os.path.isfile(highlight_target):
+                    subprocess.Popen(["open", "-R", highlight_target])
+                else:
+                    subprocess.Popen(["open", directory_candidate])
+                return
+
+            if highlight_target and os.path.isfile(highlight_target) and shutil.which("nautilus"):
+                subprocess.Popen(["nautilus", "--select", highlight_target])
+                return
+            if shutil.which("xdg-open"):
+                subprocess.Popen(["xdg-open", directory_candidate])
+                return
+
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                "Open Folder Failed",
+                f"Could not open the folder in a file browser.\n\n{exc}",
+            )
+            return
+
+        QMessageBox.warning(
+            self,
+            "Open Folder Failed",
+            "Could not find a compatible file manager to open the folder.",
+        )
 
     def _remove_from_tier(self, tier_widget: TierList, item: QListWidgetItem) -> None:
         """Remove a song from a tier and return it to the library pane."""
