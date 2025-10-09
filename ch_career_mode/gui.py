@@ -109,7 +109,7 @@ EXTERNAL_VBAR_WIDTH = 12
 CARD_CONTENT_MARGIN = 18
 CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
-DURATION_SPIN_MIN_WIDTH = 150
+FILTERS_SPINBOX_STANDARD_WIDTH = 160
 LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
 TIERS_PANEL_MIN_WIDTH = (
     TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
@@ -331,7 +331,7 @@ QSpinBox {{
     background-color: #1b2031;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    padding: 6px 40px 6px 12px;
+    padding: 6px 44px 6px 12px;
     color: rgba(244, 246, 251, 0.9);
     selection-background-color: rgba(94, 129, 255, 0.25);
     selection-color: #f4f6fb;
@@ -1121,7 +1121,6 @@ class MainWindow(QMainWindow):
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
-        self.spin_exclude_short_songs.setMinimumWidth(DURATION_SPIN_MIN_WIDTH)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
         default_short_seconds = 30
         raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
@@ -1153,7 +1152,6 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
-        self.spin_exclude_long_charts.setMinimumWidth(DURATION_SPIN_MIN_WIDTH)
         self._refresh_spinbox_width(self.spin_exclude_long_charts)
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
@@ -1205,6 +1203,8 @@ class MainWindow(QMainWindow):
             self.spin_tiers,
             self.spin_songs_per,
         )
+        self._style_filters_spinboxes()
+        self._apply_filters_spinbox_width()
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["None (Custom Tier Names)"] + list(THEME_SETS.keys()) + ["Procedural - Rock Tour"])
@@ -1432,6 +1432,8 @@ class MainWindow(QMainWindow):
         filters_form = QFormLayout(filters_page)
         filters_form.setContentsMargins(12, 12, 12, 12)
         filters_form.setSpacing(10)
+        filters_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        filters_form.setHorizontalSpacing(12)
         self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
         self.lbl_exclude_short_songs = QLabel("Exclude charts shorter than:")
@@ -1440,6 +1442,7 @@ class MainWindow(QMainWindow):
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_longrule)
+        self._apply_filters_spinbox_width()
 
         advanced_page = QWidget()
         advanced_form = QFormLayout(advanced_page)
@@ -1771,17 +1774,52 @@ class MainWindow(QMainWindow):
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
 
-    def _refresh_spinbox_width(self, spin: Optional[QSpinBox], base_minimum: int = DURATION_SPIN_MIN_WIDTH) -> None:
+    def _filters_spinboxes(self) -> List[QSpinBox]:
+        """Return the spin boxes that live within the Filters tab."""
+
+        spins: List[QSpinBox] = []
+        for attr in ("spin_artist_limit", "spin_exclude_short_songs", "spin_exclude_long_charts"):
+            candidate = getattr(self, attr, None)
+            if isinstance(candidate, QSpinBox):
+                spins.append(candidate)
+        return spins
+
+    def _style_filters_spinboxes(self) -> None:
+        """Ensure filter spin boxes use the window font and right alignment."""
+
+        font = self.font()
+        for spin in self._filters_spinboxes():
+            spin.setFont(font)
+            spin.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+    def _apply_filters_spinbox_width(self, requested_width: int = FILTERS_SPINBOX_STANDARD_WIDTH) -> None:
+        """Lock all Filters tab spin boxes to a consistent *requested_width*."""
+
+        width = max(FILTERS_SPINBOX_STANDARD_WIDTH, requested_width)
+        for spin in self._filters_spinboxes():
+            spin.setFixedWidth(width)
+            spin.updateGeometry()
+            parent = spin.parentWidget()
+            if parent is not None:
+                layout = parent.layout()
+                if layout is not None:
+                    layout.activate()
+
+    def _refresh_spinbox_width(self, spin: Optional[QSpinBox], base_minimum: int = FILTERS_SPINBOX_STANDARD_WIDTH) -> None:
         """Ensure *spin* reserves enough width for its value and suffix."""
 
         if spin is None:
             return
-        if base_minimum > 0 and spin.minimumWidth() < base_minimum:
-            spin.setMinimumWidth(base_minimum)
         spin.adjustSize()
         hint_width = spin.sizeHint().width()
-        if hint_width > 0:
-            spin.setMinimumWidth(max(base_minimum, hint_width))
+        target_width = max(base_minimum, hint_width if hint_width > 0 else 0)
+        self._apply_filters_spinbox_width(target_width)
+        spin.updateGeometry()
+        parent = spin.parentWidget()
+        if parent is not None:
+            layout = parent.layout()
+            if layout is not None:
+                layout.activate()
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""

@@ -829,3 +829,23 @@ They highlighted that the text field failed to resize when the suffix changed le
 `_refresh_spinbox_width` blocks shrinking below the 150 px baseline while still honoring the control's `sizeHint`, so switching the short-song filter between seconds and minutes expands the field before signals resume.
 
 ---
+# Session 37 — 2025-10-07 11:05
+
+## Topic
+Aligned the Filters tab spin boxes to a uniform width while guaranteeing suffix text stays fully visible.
+
+## User Desires
+The user wanted every filter spin control to share the same footprint and keep words like "seconds" and "minutes" readable without clipping when the suffix toggles.
+
+## Specifics of User Desires
+They emphasized locking all Filters tab spin boxes to a shared constant width, refreshing the layout after suffix changes, increasing padding near the arrow column, and keeping numeric text aligned cleanly with the suffix.
+
+## Actions Taken
+- Introduced `gui.py — FILTERS_SPINBOX_STANDARD_WIDTH`, helper accessors, and `_apply_filters_spinbox_width` so the artist limit and duration spin boxes all snap to the same fixed width and react to updated size hints.
+- Updated `gui.py — MainWindow._style_filters_spinboxes` and initialization flow to apply the window font, right alignment, and fixed width enforcement both before and after the widgets join the Filters form layout.
+- Expanded the QSS padding-right inside `APP_STYLE_TEMPLATE` and set `QFormLayout` growth policies to maintain balanced spacing while suffix recalculations trigger `updateGeometry()` and layout activation.
+
+## Helpful Hints
+When adjusting filter spin boxes in the future, reuse `_filters_spinboxes()` to keep width enforcement and alignment changes centralized, and call `_refresh_spinbox_width()` after tweaking suffix text so the layout reactivates immediately.
+
+---
