@@ -889,3 +889,23 @@ They emphasized soft width constraints for spin boxes instead of rigid locks, la
 Whenever suffix text changes for Filters controls, call `_refresh_spinbox_width` with the affected spin box to recompute its minimum width, and remember that `WINDOW_LAYOUT_MIN_WIDTH` captures the calculated baseline before the hard floor of 1400px is enforced.
 
 ---
+# Session 40 — 2025-10-11 08:05
+
+## Topic
+Removed the invalid spin box sizing API and replaced it with a font-metrics helper to keep Filters tab fields aligned without crashes.
+
+## User Desires
+The user wanted the Filters panel to load with consistently wide spin boxes that never clip suffix text, while avoiding the crash introduced by the unsupported AdjustToContents policy.
+
+## Specifics of User Desires
+They asked for the bad `QAbstractSpinBox.setSizeAdjustPolicy` call to be removed, for a helper that sizes spin boxes using sample strings like "888 minutes," and for the Filters form to keep its labels protected with predictable growth policies.
+
+## Actions Taken
+- Updated `gui.py — MainWindow._fit_spinbox_width` and `_apply_filters_spinbox_width` to use font metrics plus internal padding so the Filters spin boxes share a baseline width sized for worst-case suffixes.
+- Replaced legacy `_refresh_spinbox_width` calls with `_fit_spinbox_width` inside `gui.py — MainWindow._set_short_song_spinbox_display_from_seconds` and the long-chart initialization to refresh geometry after unit changes.
+- Adjusted `gui.py` Filters form setup to enforce `DontWrapRows` with `ExpandingFieldsGrow`, ensuring the label column remains visible while fields expand as needed.
+
+## Helpful Hints
+`MainWindow._fit_spinbox_width` accepts an optional `sample` string to lock widths against the largest expected value/suffix combinations, so reuse it whenever new Filters controls are added, and remember the helper already activates the parent layout after resizing.
+
+---
