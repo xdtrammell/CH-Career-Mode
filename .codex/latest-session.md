@@ -849,3 +849,23 @@ They emphasized locking all Filters tab spin boxes to a shared constant width, r
 When adjusting filter spin boxes in the future, reuse `_filters_spinboxes()` to keep width enforcement and alignment changes centralized, and call `_refresh_spinbox_width()` after tweaking suffix text so the layout reactivates immediately.
 
 ---
+# Session 38 — 2025-10-09 09:44
+
+## Topic
+Stabilized the Filters tab label column while maintaining consistent spin box sizing and suffix visibility.
+
+## User Desires
+The user wanted every label in the Filters tab to remain readable regardless of window width while keeping the spin boxes wide enough to show full suffix text.
+
+## Specifics of User Desires
+They requested a reusable label helper with a reserved minimum width, unified spin box sizing without over-constraining the layout, refreshed layout policies, and stylesheet safeguards so labels stay visible.
+
+## Actions Taken
+- Added `gui.py — MainWindow._form_label` to compute a shared minimum width using font metrics and applied it to the Filters tab labels while switching the form layout policy to `ExpandingFieldsGrow` with top alignment.
+- Bumped `gui.py — FILTERS_SPINBOX_STANDARD_WIDTH` to 170 and retained the shared `_apply_filters_spinbox_width` enforcement so all three filter spin boxes have matching footprints after suffix changes trigger geometry refreshes.
+- Updated `gui.py — APP_STYLE_TEMPLATE` to provide a default QLabel color, ensuring form text stays legible across theme tweaks, and re-ran `python -m compileall ch_career_mode` for verification.
+
+## Helpful Hints
+`MainWindow._form_label` caches the calculated column width, so future Filters tab labels can call it directly without recalculating font metrics, and `_refresh_spinbox_width` continues to reactivate the parent layout whenever a suffix toggles between seconds and minutes.
+
+---

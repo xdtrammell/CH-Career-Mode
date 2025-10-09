@@ -109,7 +109,7 @@ EXTERNAL_VBAR_WIDTH = 12
 CARD_CONTENT_MARGIN = 18
 CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
-FILTERS_SPINBOX_STANDARD_WIDTH = 160
+FILTERS_SPINBOX_STANDARD_WIDTH = 170
 LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
 TIERS_PANEL_MIN_WIDTH = (
     TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
@@ -241,6 +241,10 @@ QMainWindow {{
     color: #f4f6fb;
     font-family: "Segoe UI", "Roboto", sans-serif;
     font-size: 11pt;
+}}
+
+QLabel {{
+    color: rgba(244, 246, 251, 0.86);
 }}
 
 QFrame#panelCard {{
@@ -1432,13 +1436,14 @@ class MainWindow(QMainWindow):
         filters_form = QFormLayout(filters_page)
         filters_form.setContentsMargins(12, 12, 12, 12)
         filters_form.setSpacing(10)
-        filters_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        filters_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
         filters_form.setHorizontalSpacing(12)
-        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
+        filters_form.setFormAlignment(Qt.AlignTop)
+        self.lbl_artist_limit = self._form_label("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        self.lbl_exclude_short_songs = QLabel("Exclude charts shorter than:")
+        self.lbl_exclude_short_songs = self._form_label("Exclude charts shorter than:")
         filters_form.addRow(self.lbl_exclude_short_songs, self.spin_exclude_short_songs)
-        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
+        self.lbl_exclude_long_charts = self._form_label("Exclude charts longer than:")
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_longrule)
@@ -1773,6 +1778,22 @@ class MainWindow(QMainWindow):
             spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
+
+    def _form_label(self, text: str) -> QLabel:
+        """Return a Filters form label with a guaranteed minimum width."""
+
+        label = QLabel(text)
+        label.setObjectName("formLabel")
+        label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        min_width = getattr(self, "_filters_form_label_min_width", None)
+        if min_width is None:
+            metrics = self.fontMetrics()
+            baseline = "Exclude charts longer than:"
+            min_width = metrics.horizontalAdvance(baseline) + 12 if metrics is not None else len(baseline) * 8
+            self._filters_form_label_min_width = int(min_width)
+        label.setMinimumWidth(int(getattr(self, "_filters_form_label_min_width", min_width)))
+        label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        return label
 
     def _filters_spinboxes(self) -> List[QSpinBox]:
         """Return the spin boxes that live within the Filters tab."""
