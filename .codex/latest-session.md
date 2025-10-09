@@ -808,3 +808,24 @@ They emphasized keeping the up arrow increasing and down arrow decreasing everyw
 Chevron icons now live beside the Python package under `assets/icons`; when adjusting colors, update both default and accent variants together. Use `_configure_spinboxes` whenever adding a new QSpinBox so alignment and button symbols stay consistent without duplicating setup code.
 
 ---
+# Session 36 — 2025-10-07 10:20
+
+## Topic
+Prevented duration spin boxes from truncating suffix labels while keeping the refreshed styling intact.
+
+## User Desires
+The user asked for the duration filters to show full words like "seconds" and "minutes" without clipping while preserving the modern spin box behavior introduced earlier.
+
+## Specifics of User Desires
+They highlighted that the text field failed to resize when the suffix changed length, leading to truncated labels, and requested wider controls, padding adjustments, and dynamic recalculation whenever the suffix toggles between seconds and minutes.
+
+## Actions Taken
+- Declared `gui.py — DURATION_SPIN_MIN_WIDTH` and applied it to the short- and long-song spin boxes during construction so they always start wide enough for longer suffixes.
+- Added `gui.py — MainWindow._refresh_spinbox_width` and called it from `_set_short_song_spinbox_display_from_seconds` and the long-song constructor path to remeasure width after any suffix update.
+- Increased the shared QSS padding inside `APP_STYLE_TEMPLATE` to keep suffix text from colliding with the stacked arrow column on every QSpinBox.
+- Recompiled the GUI package with `python -m compileall ch_career_mode` to verify the adjustments remain syntax-safe.
+
+## Helpful Hints
+`_refresh_spinbox_width` blocks shrinking below the 150 px baseline while still honoring the control's `sizeHint`, so switching the short-song filter between seconds and minutes expands the field before signals resume.
+
+---

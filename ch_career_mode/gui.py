@@ -109,6 +109,7 @@ EXTERNAL_VBAR_WIDTH = 12
 CARD_CONTENT_MARGIN = 18
 CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
 WINDOW_MIN_HEIGHT = 760
+DURATION_SPIN_MIN_WIDTH = 150
 LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
 TIERS_PANEL_MIN_WIDTH = (
     TIER_COLUMNS * TIER_COLUMN_MIN_WIDTH
@@ -330,7 +331,7 @@ QSpinBox {{
     background-color: #1b2031;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    padding: 6px 36px 6px 12px;
+    padding: 6px 40px 6px 12px;
     color: rgba(244, 246, 251, 0.9);
     selection-background-color: rgba(94, 129, 255, 0.25);
     selection-color: #f4f6fb;
@@ -1120,6 +1121,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
+        self.spin_exclude_short_songs.setMinimumWidth(DURATION_SPIN_MIN_WIDTH)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
         default_short_seconds = 30
         raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
@@ -1151,6 +1153,8 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
+        self.spin_exclude_long_charts.setMinimumWidth(DURATION_SPIN_MIN_WIDTH)
+        self._refresh_spinbox_width(self.spin_exclude_long_charts)
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1767,6 +1771,18 @@ class MainWindow(QMainWindow):
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
 
+    def _refresh_spinbox_width(self, spin: Optional[QSpinBox], base_minimum: int = DURATION_SPIN_MIN_WIDTH) -> None:
+        """Ensure *spin* reserves enough width for its value and suffix."""
+
+        if spin is None:
+            return
+        if base_minimum > 0 and spin.minimumWidth() < base_minimum:
+            spin.setMinimumWidth(base_minimum)
+        spin.adjustSize()
+        hint_width = spin.sizeHint().width()
+        if hint_width > 0:
+            spin.setMinimumWidth(max(base_minimum, hint_width))
+
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
 
@@ -1970,6 +1986,7 @@ class MainWindow(QMainWindow):
             spin.setSuffix(" minutes")
             spin.setValue(minutes)
             spin.setProperty("_short_song_unit", "minutes")
+            self._refresh_spinbox_width(spin)
         else:
             if seconds % 5:
                 seconds = max(5, min(60, seconds - (seconds % 5)))
@@ -1979,6 +1996,7 @@ class MainWindow(QMainWindow):
             spin.setSuffix(" seconds")
             spin.setValue(seconds)
             spin.setProperty("_short_song_unit", "seconds")
+            self._refresh_spinbox_width(spin)
         spin.blockSignals(was_blocked)
 
     def _on_short_song_threshold_changed(self, value: int) -> None:
