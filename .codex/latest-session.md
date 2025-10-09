@@ -869,3 +869,23 @@ They requested a reusable label helper with a reserved minimum width, unified sp
 `MainWindow._form_label` caches the calculated column width, so future Filters tab labels can call it directly without recalculating font metrics, and `_refresh_spinbox_width` continues to reactivate the parent layout whenever a suffix toggles between seconds and minutes.
 
 ---
+# Session 39 — 2025-10-10 15:20
+
+## Topic
+Addressed Filters tab label overlap regressions and restored reliable window sizing behavior requested after Session 38.
+
+## User Desires
+The user wanted the Filters panel to load with readable labels, unclipped suffix text, and an initial window width that matches their reference screenshots without requiring manual resizing.
+
+## Specifics of User Desires
+They emphasized soft width constraints for spin boxes instead of rigid locks, layout re-activation after suffix changes, stronger minimum widths for the settings column, and enforcing a default application window size of 1560×870.
+
+## Actions Taken
+- Updated `gui.py — MainWindow._apply_filters_spinbox_width` and `_refresh_spinbox_width` to use minimum widths with `AdjustToContents`, keeping suffixes visible while letting fields grow naturally.
+- Raised `gui.py` sizing constants (e.g., `SETTINGS_MIN_WIDTH`, `WINDOW_MIN_WIDTH`, `DEFAULT_WINDOW_SIZE`) and applied them when building the main layout so the settings card never collapses and the window opens at the target footprint.
+- Tweaked `gui.py` Filters form creation to set label alignment and growth policy per the new guidance, then refreshed `_update_size_constraints` to honor the higher baseline width before recalculating geometry.
+
+## Helpful Hints
+Whenever suffix text changes for Filters controls, call `_refresh_spinbox_width` with the affected spin box to recompute its minimum width, and remember that `WINDOW_LAYOUT_MIN_WIDTH` captures the calculated baseline before the hard floor of 1400px is enforced.
+
+---

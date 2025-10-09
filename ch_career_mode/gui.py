@@ -101,14 +101,14 @@ TIER_GRID_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_MARGIN = 8
 MAIN_LAYOUT_SPACING = 12
 LIBRARY_MIN_WIDTH = 300
-SETTINGS_MIN_WIDTH = 280
+SETTINGS_MIN_WIDTH = 360
 TIER_COLUMN_MIN_WIDTH = 240
 TIER_LIST_EXTRA_PADDING = 8
 TIER_SCROLL_GUTTER_WIDTH = 12
 EXTERNAL_VBAR_WIDTH = 12
 CARD_CONTENT_MARGIN = 18
 CARD_CONTENT_PADDING = CARD_CONTENT_MARGIN * 2
-WINDOW_MIN_HEIGHT = 760
+WINDOW_MIN_HEIGHT = 800
 FILTERS_SPINBOX_STANDARD_WIDTH = 170
 LIBRARY_PANEL_MIN_WIDTH = LIBRARY_MIN_WIDTH + CARD_CONTENT_PADDING
 TIERS_PANEL_MIN_WIDTH = (
@@ -119,14 +119,15 @@ TIERS_PANEL_MIN_WIDTH = (
     + TIER_SCROLL_GUTTER_WIDTH
     + EXTERNAL_VBAR_WIDTH
 )
-WINDOW_MIN_WIDTH = (
+WINDOW_LAYOUT_MIN_WIDTH = (
     LIBRARY_PANEL_MIN_WIDTH
     + SETTINGS_MIN_WIDTH
     + TIERS_PANEL_MIN_WIDTH
     + 2 * MAIN_LAYOUT_SPACING
     + 2 * MAIN_LAYOUT_MARGIN
 )
-DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH + 40, WINDOW_MIN_HEIGHT)
+WINDOW_MIN_WIDTH = max(1400, WINDOW_LAYOUT_MIN_WIDTH)
+DEFAULT_WINDOW_SIZE = QSize(1560, 870)
 
 
 THEME_SETS = {
@@ -1436,7 +1437,8 @@ class MainWindow(QMainWindow):
         filters_form = QFormLayout(filters_page)
         filters_form.setContentsMargins(12, 12, 12, 12)
         filters_form.setSpacing(10)
-        filters_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        filters_form.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        filters_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         filters_form.setHorizontalSpacing(12)
         filters_form.setFormAlignment(Qt.AlignTop)
         self.lbl_artist_limit = self._form_label("Max tracks by artist per tier:")
@@ -1468,6 +1470,13 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(library_card, 2)
         self.main_layout.addWidget(tiers_card, 3)
         self.main_layout.addWidget(self.settings_box, 2)
+
+        self.settings_box.setMinimumWidth(SETTINGS_MIN_WIDTH)
+        self.setMinimumSize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
+        self.resize(DEFAULT_WINDOW_SIZE)
+        # Optional hard lock to screenshot reference width:
+        # self.setMinimumWidth(DEFAULT_WINDOW_SIZE.width())
+        # self.setMaximumWidth(DEFAULT_WINDOW_SIZE.width())
 
         self._refresh_workflow_buttons_and_update()
         self._update_folder_status()
@@ -1814,17 +1823,18 @@ class MainWindow(QMainWindow):
             spin.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
     def _apply_filters_spinbox_width(self, requested_width: int = FILTERS_SPINBOX_STANDARD_WIDTH) -> None:
-        """Lock all Filters tab spin boxes to a consistent *requested_width*."""
+        """Give Filters spin boxes a sane minimum while allowing responsive growth."""
 
         width = max(FILTERS_SPINBOX_STANDARD_WIDTH, requested_width)
         for spin in self._filters_spinboxes():
-            spin.setFixedWidth(width)
+            spin.setMinimumWidth(width)
+            spin.setMaximumWidth(320)
+            spin.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+            spin.setSizeAdjustPolicy(QAbstractSpinBox.AdjustToContents)
             spin.updateGeometry()
             parent = spin.parentWidget()
-            if parent is not None:
-                layout = parent.layout()
-                if layout is not None:
-                    layout.activate()
+            if parent and parent.layout():
+                parent.layout().activate()
 
     def _refresh_spinbox_width(self, spin: Optional[QSpinBox], base_minimum: int = FILTERS_SPINBOX_STANDARD_WIDTH) -> None:
         """Ensure *spin* reserves enough width for its value and suffix."""
@@ -1833,14 +1843,12 @@ class MainWindow(QMainWindow):
             return
         spin.adjustSize()
         hint_width = spin.sizeHint().width()
-        target_width = max(base_minimum, hint_width if hint_width > 0 else 0)
-        self._apply_filters_spinbox_width(target_width)
+        target = max(base_minimum, hint_width if hint_width else base_minimum)
+        spin.setMinimumWidth(target)
         spin.updateGeometry()
         parent = spin.parentWidget()
-        if parent is not None:
-            layout = parent.layout()
-            if layout is not None:
-                layout.activate()
+        if parent and parent.layout():
+            parent.layout().activate()
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
@@ -1899,6 +1907,7 @@ class MainWindow(QMainWindow):
             + 2 * MAIN_LAYOUT_SPACING
             + 2 * MAIN_LAYOUT_MARGIN
         )
+        window_min_width = max(WINDOW_MIN_WIDTH, window_min_width)
         if hasattr(self, 'lib_list'):
             self.lib_list.setMinimumWidth(LIBRARY_MIN_WIDTH)
         if hasattr(self, 'library_card'):
