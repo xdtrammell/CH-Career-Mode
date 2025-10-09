@@ -808,104 +808,23 @@ They emphasized keeping the up arrow increasing and down arrow decreasing everyw
 Chevron icons now live beside the Python package under `assets/icons`; when adjusting colors, update both default and accent variants together. Use `_configure_spinboxes` whenever adding a new QSpinBox so alignment and button symbols stay consistent without duplicating setup code.
 
 ---
-# Session 36 — 2025-10-07 10:20
+# Session 36 — 2025-10-11 12:10
 
 ## Topic
-Prevented duration spin boxes from truncating suffix labels while keeping the refreshed styling intact.
+Rolled the Filters interface back to the baseline spin box styling from Session 35 at the user's request.
 
 ## User Desires
-The user asked for the duration filters to show full words like "seconds" and "minutes" without clipping while preserving the modern spin box behavior introduced earlier.
+The user explicitly asked to discard the recent Filters sizing experiments and return the application to the exact state captured in commit 9237265f852660fe5ebeac4c45373d0efd600ab7.
 
 ## Specifics of User Desires
-They highlighted that the text field failed to resize when the suffix changed length, leading to truncated labels, and requested wider controls, padding adjustments, and dynamic recalculation whenever the suffix toggles between seconds and minutes.
+They wanted every change made after that commit removed so the Filters tab, window sizing, and associated helpers matched the earlier styling and layout that they preferred.
 
 ## Actions Taken
-- Declared `gui.py — DURATION_SPIN_MIN_WIDTH` and applied it to the short- and long-song spin boxes during construction so they always start wide enough for longer suffixes.
-- Added `gui.py — MainWindow._refresh_spinbox_width` and called it from `_set_short_song_spinbox_display_from_seconds` and the long-song constructor path to remeasure width after any suffix update.
-- Increased the shared QSS padding inside `APP_STYLE_TEMPLATE` to keep suffix text from colliding with the stacked arrow column on every QSpinBox.
-- Recompiled the GUI package with `python -m compileall ch_career_mode` to verify the adjustments remain syntax-safe.
+- Reset the working tree to commit `9237265f852660fe5ebeac4c45373d0efd600ab7` and restored `.codex/latest-session.md` along with `ch_career_mode/gui.py` to that snapshot.
+- Verified that the Filters spin box helpers, window sizing constants, and added layout policies from later commits were completely removed so only the original styling remains.
+- Prepared a new commit that captures the rollback so future work can start again from the requested baseline.
 
 ## Helpful Hints
-`_refresh_spinbox_width` blocks shrinking below the 150 px baseline while still honoring the control's `sizeHint`, so switching the short-song filter between seconds and minutes expands the field before signals resume.
-
----
-# Session 37 — 2025-10-07 11:05
-
-## Topic
-Aligned the Filters tab spin boxes to a uniform width while guaranteeing suffix text stays fully visible.
-
-## User Desires
-The user wanted every filter spin control to share the same footprint and keep words like "seconds" and "minutes" readable without clipping when the suffix toggles.
-
-## Specifics of User Desires
-They emphasized locking all Filters tab spin boxes to a shared constant width, refreshing the layout after suffix changes, increasing padding near the arrow column, and keeping numeric text aligned cleanly with the suffix.
-
-## Actions Taken
-- Introduced `gui.py — FILTERS_SPINBOX_STANDARD_WIDTH`, helper accessors, and `_apply_filters_spinbox_width` so the artist limit and duration spin boxes all snap to the same fixed width and react to updated size hints.
-- Updated `gui.py — MainWindow._style_filters_spinboxes` and initialization flow to apply the window font, right alignment, and fixed width enforcement both before and after the widgets join the Filters form layout.
-- Expanded the QSS padding-right inside `APP_STYLE_TEMPLATE` and set `QFormLayout` growth policies to maintain balanced spacing while suffix recalculations trigger `updateGeometry()` and layout activation.
-
-## Helpful Hints
-When adjusting filter spin boxes in the future, reuse `_filters_spinboxes()` to keep width enforcement and alignment changes centralized, and call `_refresh_spinbox_width()` after tweaking suffix text so the layout reactivates immediately.
-
----
-# Session 38 — 2025-10-09 09:44
-
-## Topic
-Stabilized the Filters tab label column while maintaining consistent spin box sizing and suffix visibility.
-
-## User Desires
-The user wanted every label in the Filters tab to remain readable regardless of window width while keeping the spin boxes wide enough to show full suffix text.
-
-## Specifics of User Desires
-They requested a reusable label helper with a reserved minimum width, unified spin box sizing without over-constraining the layout, refreshed layout policies, and stylesheet safeguards so labels stay visible.
-
-## Actions Taken
-- Added `gui.py — MainWindow._form_label` to compute a shared minimum width using font metrics and applied it to the Filters tab labels while switching the form layout policy to `ExpandingFieldsGrow` with top alignment.
-- Bumped `gui.py — FILTERS_SPINBOX_STANDARD_WIDTH` to 170 and retained the shared `_apply_filters_spinbox_width` enforcement so all three filter spin boxes have matching footprints after suffix changes trigger geometry refreshes.
-- Updated `gui.py — APP_STYLE_TEMPLATE` to provide a default QLabel color, ensuring form text stays legible across theme tweaks, and re-ran `python -m compileall ch_career_mode` for verification.
-
-## Helpful Hints
-`MainWindow._form_label` caches the calculated column width, so future Filters tab labels can call it directly without recalculating font metrics, and `_refresh_spinbox_width` continues to reactivate the parent layout whenever a suffix toggles between seconds and minutes.
-
----
-# Session 39 — 2025-10-10 15:20
-
-## Topic
-Addressed Filters tab label overlap regressions and restored reliable window sizing behavior requested after Session 38.
-
-## User Desires
-The user wanted the Filters panel to load with readable labels, unclipped suffix text, and an initial window width that matches their reference screenshots without requiring manual resizing.
-
-## Specifics of User Desires
-They emphasized soft width constraints for spin boxes instead of rigid locks, layout re-activation after suffix changes, stronger minimum widths for the settings column, and enforcing a default application window size of 1560×870.
-
-## Actions Taken
-- Updated `gui.py — MainWindow._apply_filters_spinbox_width` and `_refresh_spinbox_width` to use minimum widths with `AdjustToContents`, keeping suffixes visible while letting fields grow naturally.
-- Raised `gui.py` sizing constants (e.g., `SETTINGS_MIN_WIDTH`, `WINDOW_MIN_WIDTH`, `DEFAULT_WINDOW_SIZE`) and applied them when building the main layout so the settings card never collapses and the window opens at the target footprint.
-- Tweaked `gui.py` Filters form creation to set label alignment and growth policy per the new guidance, then refreshed `_update_size_constraints` to honor the higher baseline width before recalculating geometry.
-
-## Helpful Hints
-Whenever suffix text changes for Filters controls, call `_refresh_spinbox_width` with the affected spin box to recompute its minimum width, and remember that `WINDOW_LAYOUT_MIN_WIDTH` captures the calculated baseline before the hard floor of 1400px is enforced.
-
----
-# Session 40 — 2025-10-11 08:05
-
-## Topic
-Removed the invalid spin box sizing API and replaced it with a font-metrics helper to keep Filters tab fields aligned without crashes.
-
-## User Desires
-The user wanted the Filters panel to load with consistently wide spin boxes that never clip suffix text, while avoiding the crash introduced by the unsupported AdjustToContents policy.
-
-## Specifics of User Desires
-They asked for the bad `QAbstractSpinBox.setSizeAdjustPolicy` call to be removed, for a helper that sizes spin boxes using sample strings like "888 minutes," and for the Filters form to keep its labels protected with predictable growth policies.
-
-## Actions Taken
-- Updated `gui.py — MainWindow._fit_spinbox_width` and `_apply_filters_spinbox_width` to use font metrics plus internal padding so the Filters spin boxes share a baseline width sized for worst-case suffixes.
-- Replaced legacy `_refresh_spinbox_width` calls with `_fit_spinbox_width` inside `gui.py — MainWindow._set_short_song_spinbox_display_from_seconds` and the long-chart initialization to refresh geometry after unit changes.
-- Adjusted `gui.py` Filters form setup to enforce `DontWrapRows` with `ExpandingFieldsGrow`, ensuring the label column remains visible while fields expand as needed.
-
-## Helpful Hints
-`MainWindow._fit_spinbox_width` accepts an optional `sample` string to lock widths against the largest expected value/suffix combinations, so reuse it whenever new Filters controls are added, and remember the helper already activates the parent layout after resizing.
+When reintroducing Filters adjustments in the future, start from this restored baseline and reapply changes incrementally, ensuring each commit keeps the spin boxes and labels visually aligned without reintroducing the sizing issues.
 
 ---
