@@ -787,3 +787,24 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 35 — 2025-10-07 09:45
+
+## Topic
+Refined every spin box control so arrows, styling, and feedback match the modern dark theme.
+
+## User Desires
+The user wanted all QSpinBox widgets to feel intuitive and professional with consistent vertical arrows, clear affordances, and feedback aligned with the rest of the UI.
+
+## Specifics of User Desires
+They emphasized keeping the up arrow increasing and down arrow decreasing everywhere, stacking the buttons on the right, introducing clearer chevron icons with hover/press accents, preserving keyboard and scroll interactions, and fitting the controls within the sleek dark surface treatment.
+
+## Actions Taken
+- Added themed chevron SVG assets under `ch_career_mode/assets/icons` and wired their paths into `APP_STYLE_TEMPLATE` so QSpinBox arrow states load crisp vector art.
+- Reworked the stylesheet’s spin box block to apply the new background, borders, padding, hover/press feedback, and stacked button layout while keeping focus rings on brand.
+- Introduced `MainWindow._configure_spinboxes` to left-align values, enforce vertical arrows, and enable acceleration on every relevant spin box created in `MainWindow.__init__`.
+- Ran `python -m compileall ch_career_mode` to confirm the module compiles cleanly after the styling refactor.
+
+## Helpful Hints
+Chevron icons now live beside the Python package under `assets/icons`; when adjusting colors, update both default and accent variants together. Use `_configure_spinboxes` whenever adding a new QSpinBox so alignment and button symbols stay consistent without duplicating setup code.
+
+---

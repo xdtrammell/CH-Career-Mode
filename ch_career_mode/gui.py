@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import Dict, List, Optional, cast
 from dataclasses import replace
 
@@ -59,6 +60,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QStackedWidget,
     QMenu,
+    QAbstractSpinBox,
 )
 import shiboken6
 
@@ -208,6 +210,23 @@ SCAN_PHASE2_COLOR = "#9E6FFF"
 SCAN_PHASE_HEADER_COLOR = "#A5D6FF"
 SCAN_COLOR_ANIM_DURATION_MS = 350
 
+APP_DIR = Path(__file__).resolve().parent
+ICON_DIR = APP_DIR / "assets" / "icons"
+
+
+def _icon_path(name: str) -> str:
+    """Return a forward-slash-separated path for a themed icon asset."""
+
+    return (ICON_DIR / name).resolve().as_posix()
+
+
+SPIN_UP_ICON = _icon_path("chevron_up.svg")
+SPIN_UP_ICON_HOVER = _icon_path("chevron_up_accent.svg")
+SPIN_UP_ICON_DISABLED = _icon_path("chevron_up_disabled.svg")
+SPIN_DOWN_ICON = _icon_path("chevron_down.svg")
+SPIN_DOWN_ICON_HOVER = _icon_path("chevron_down_accent.svg")
+SPIN_DOWN_ICON_DISABLED = _icon_path("chevron_down_disabled.svg")
+
 SCAN_IDLE = "idle"
 SCAN_PHASE1 = "phase1"
 SCAN_PHASE2 = "phase2"
@@ -296,15 +315,88 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
+QLineEdit, QComboBox {{
     background-color: rgba(10, 12, 18, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 6px 10px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+QLineEdit:focus, QComboBox:focus {{
     border-color: {accent};
+}}
+
+QSpinBox {{
+    background-color: #1b2031;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 36px 6px 12px;
+    color: rgba(244, 246, 251, 0.9);
+    selection-background-color: rgba(94, 129, 255, 0.25);
+    selection-color: #f4f6fb;
+}}
+QSpinBox:focus {{
+    border-color: rgba(94, 129, 255, 0.6);
+    background-color: #20263a;
+}}
+QSpinBox::up-button,
+QSpinBox::down-button {{
+    subcontrol-origin: border;
+    width: 30px;
+    background-color: transparent;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 2px 2px 2px 0;
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-top-right-radius: 7px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: 7px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+}}
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {{
+    background-color: rgba(0, 0, 0, 0.35);
+}}
+QSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled {{
+    background-color: transparent;
+    border-color: rgba(255, 255, 255, 0.04);
+}}
+QSpinBox::up-arrow {{
+    width: 12px;
+    height: 12px;
+    image: url({spin_up_icon});
+}}
+QSpinBox::up-arrow:hover {{
+    image: url({spin_up_icon_hover});
+}}
+QSpinBox::up-arrow:pressed {{
+    image: url({spin_up_icon_hover});
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url({spin_up_icon_disabled});
+}}
+QSpinBox::down-arrow {{
+    width: 12px;
+    height: 12px;
+    image: url({spin_down_icon});
+}}
+QSpinBox::down-arrow:hover {{
+    image: url({spin_down_icon_hover});
+}}
+QSpinBox::down-arrow:pressed {{
+    image: url({spin_down_icon_hover});
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url({spin_down_icon_disabled});
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
@@ -935,6 +1027,12 @@ class MainWindow(QMainWindow):
                 accent=ACCENT_COLOR,
                 accent_hover=ACCENT_COLOR_HOVER,
                 surface=SURFACE_COLOR,
+                spin_up_icon=SPIN_UP_ICON,
+                spin_up_icon_hover=SPIN_UP_ICON_HOVER,
+                spin_up_icon_disabled=SPIN_UP_ICON_DISABLED,
+                spin_down_icon=SPIN_DOWN_ICON,
+                spin_down_icon_hover=SPIN_DOWN_ICON_HOVER,
+                spin_down_icon_disabled=SPIN_DOWN_ICON_DISABLED,
             )
         )
 
@@ -1092,6 +1190,17 @@ class MainWindow(QMainWindow):
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
+
+        self._configure_spinboxes(
+            self.diff_min,
+            self.diff_max,
+            self.spin_artist_limit,
+            self.spin_exclude_short_songs,
+            self.spin_exclude_long_charts,
+            self.spin_min_diff,
+            self.spin_tiers,
+            self.spin_songs_per,
+        )
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["None (Custom Tier Names)"] + list(THEME_SETS.keys()) + ["Procedural - Rock Tour"])
@@ -1647,6 +1756,16 @@ class MainWindow(QMainWindow):
         effect.setOffset(x, y)
         effect.setColor(QColor(0, 0, 0, max(0, min(255, alpha))))
         widget.setGraphicsEffect(effect)
+
+    def _configure_spinboxes(self, *spins: QSpinBox) -> None:
+        """Apply consistent alignment and behavior to themed spin boxes."""
+
+        for spin in spins:
+            if spin is None:
+                continue
+            spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+            spin.setAccelerated(True)
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
