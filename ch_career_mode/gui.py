@@ -330,7 +330,7 @@ QSpinBox {{
     background-color: #1b2031;
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
-    padding: 6px 36px 6px 12px;
+    padding: 6px 48px 6px 12px;
     color: rgba(244, 246, 251, 0.9);
     selection-background-color: rgba(94, 129, 255, 0.25);
     selection-color: #f4f6fb;

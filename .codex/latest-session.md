@@ -828,3 +828,23 @@ They wanted every change made after that commit removed so the Filters tab, wind
 When reintroducing Filters adjustments in the future, start from this restored baseline and reapply changes incrementally, ensuring each commit keeps the spin boxes and labels visually aligned without reintroducing the sizing issues.
 
 ---
+# Session 37 — 2025-10-11 12:45
+
+## Topic
+Adjusted spin box padding so longer suffixes remain visible without altering overall layout sizing.
+
+## User Desires
+The user wanted “seconds” and “minutes” suffix strings to stop clipping against the internal arrow column while preserving the previously restored design and layout widths.
+
+## Specifics of User Desires
+They requested a minimal change limited to increasing the right-side padding inside the QSpinBox text area so the suffix text has enough space, stressing that no external dimensions or alignments should be altered.
+
+## Actions Taken
+- Updated `ch_career_mode/gui.py — APP_STYLE_TEMPLATE` to raise the QSpinBox right padding from 36px to 48px so the text field has additional breathing room before the arrow column.
+- Verified that the adjustment leaves the rest of the spin box styling intact and that both “30 seconds” and “90 minutes” can render fully.
+- Confirmed that no other layout widths or helper functions were modified to respect the user’s request for a targeted fix.
+
+## Helpful Hints
+Future suffix changes should continue to use the shared stylesheet so spacing remains consistent across spin boxes; further clipping issues can be addressed by tweaking padding rather than altering control widths.
+
+---
