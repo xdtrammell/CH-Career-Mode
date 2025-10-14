@@ -1113,11 +1113,16 @@ class MainWindow(QMainWindow):
         self._default_weight_nps_tooltip = "Adds Avg/Peak NPS to the difficulty score when enabled."
         self.chk_weight_nps.setToolTip(self._default_weight_nps_tooltip)
 
+        self._filters_label_min_width = self.fontMetrics().horizontalAdvance(
+            "Exclude charts longer than:"
+        )
+
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
         self._refresh_spinbox_width(self.spin_artist_limit)
+        self._update_size_constraints()
 
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
@@ -1138,6 +1143,7 @@ class MainWindow(QMainWindow):
         else:
             self.settings.setValue("exclude_short_songs_seconds", self._short_song_seconds)
         self._refresh_spinbox_width(self.spin_exclude_short_songs)
+        self._update_size_constraints()
 
         if self.settings.contains("exclude_long_songs_minutes"):
             stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
@@ -1155,6 +1161,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
         self._refresh_spinbox_width(self.spin_exclude_long_charts)
+        self._update_size_constraints()
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1432,11 +1439,12 @@ class MainWindow(QMainWindow):
         filters_form = QFormLayout(filters_page)
         filters_form.setContentsMargins(12, 12, 12, 12)
         filters_form.setSpacing(10)
-        self.lbl_artist_limit = QLabel("Max tracks by artist per tier:")
+        self.filters_form = filters_form
+        self.lbl_artist_limit = self._create_filters_label("Max tracks by artist per tier:")
         filters_form.addRow(self.lbl_artist_limit, self.spin_artist_limit)
-        self.lbl_exclude_short_songs = QLabel("Exclude charts shorter than:")
+        self.lbl_exclude_short_songs = self._create_filters_label("Exclude charts shorter than:")
         filters_form.addRow(self.lbl_exclude_short_songs, self.spin_exclude_short_songs)
-        self.lbl_exclude_long_charts = QLabel("Exclude charts longer than:")
+        self.lbl_exclude_long_charts = self._create_filters_label("Exclude charts longer than:")
         filters_form.addRow(self.lbl_exclude_long_charts, self.spin_exclude_long_charts)
         filters_form.addRow(self.chk_exclude_meme)
         filters_form.addRow(self.chk_longrule)
@@ -1771,6 +1779,18 @@ class MainWindow(QMainWindow):
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
 
+    def _create_filters_label(self, text: str) -> QLabel:
+        """Return a Filters label sized to preserve the column width."""
+
+        label = QLabel(text)
+        width = getattr(self, "_filters_label_min_width", 0)
+        if width <= 0:
+            width = self.fontMetrics().horizontalAdvance("Exclude charts longer than:")
+            self._filters_label_min_width = width
+        label.setMinimumWidth(max(0, width))
+        label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        return label
+
     def _refresh_spinbox_width(
         self,
         spin: Optional[QSpinBox],
@@ -1839,6 +1859,38 @@ class MainWindow(QMainWindow):
         width_before_adjust = self.width()
         actions_min_width = self._workflow_actions_minimum_width()
         settings_min = max(SETTINGS_MIN_WIDTH, actions_min_width)
+
+        filters_form = getattr(self, "filters_form", None)
+        if filters_form is not None:
+            label_width = max(getattr(self, "_filters_label_min_width", 0), 0)
+            spin_widths: List[int] = []
+            for attr in (
+                "spin_artist_limit",
+                "spin_exclude_short_songs",
+                "spin_exclude_long_charts",
+            ):
+                spin = getattr(self, attr, None)
+                if spin is None:
+                    continue
+                width = max(spin.minimumWidth(), spin.minimumSizeHint().width())
+                if width > 0:
+                    spin_widths.append(width)
+            widest_spin = max(spin_widths) if spin_widths else 0
+            spacing = filters_form.horizontalSpacing()
+            if spacing is None or spacing < 0:
+                spacing = filters_form.spacing()
+            if spacing is None or spacing < 0:
+                spacing = 0
+            form_margins: QMargins = filters_form.contentsMargins()
+            form_margin_total = form_margins.left() + form_margins.right()
+            settings_layout = getattr(self, "settings_layout", None)
+            layout_margin_total = 0
+            if settings_layout is not None:
+                layout_margins: QMargins = settings_layout.contentsMargins()
+                layout_margin_total = layout_margins.left() + layout_margins.right()
+            filters_required = label_width + widest_spin + spacing + form_margin_total + layout_margin_total
+            settings_min = max(settings_min, filters_required)
+
         window_min_width = (
             LIBRARY_PANEL_MIN_WIDTH
             + settings_min
@@ -2003,6 +2055,7 @@ class MainWindow(QMainWindow):
             spin.setProperty("_short_song_unit", "seconds")
         spin.blockSignals(was_blocked)
         self._refresh_spinbox_width(spin)
+        self._update_size_constraints()
 
     def _on_short_song_threshold_changed(self, value: int) -> None:
         """Keep the short-song threshold consistent when crossing unit boundaries."""

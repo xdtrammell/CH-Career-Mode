@@ -869,3 +869,26 @@ They asked for a shared Filters spin box width baseline plus a helper that recal
 Whenever Filters spin box content changes, call `_refresh_spinbox_width` to sync the control’s minimum width with the new size hint so future style tweaks (like padding) cannot reintroduce truncation.
 
 ---
+
+---
+
+# Session 39 — 2025-10-11 14:30
+
+## Topic
+Reinforced the Filters column sizing so captions and controls stay readable at minimum widths.
+
+## User Desires
+The user wanted the Filters labels to share a consistent width while keeping longer suffixes like "30 seconds" and "110 minutes" fully visible without manual resizing.
+
+## Specifics of User Desires
+They asked for a helper that standardizes label sizing, an updated settings minimum that respects the Filters form geometry, and automatic width recalculations whenever the spin boxes change units.
+
+## Actions Taken
+- Added `_create_filters_label` and a stored font-metric width in `gui.py — MainWindow.__init__` so Filters captions align and keep their column from collapsing.
+- Extended `gui.py — MainWindow._update_size_constraints` to include Filters label, spacing, margin, and spin box requirements when enforcing the settings card minimum.
+- Triggered `_update_size_constraints()` after every Filters `_refresh_spinbox_width` call, including the unit toggle logic in `_set_short_song_spinbox_display_from_seconds`.
+
+## Helpful Hints
+When introducing new Filters controls, create their labels through `_create_filters_label` and remember to refresh widths plus `_update_size_constraints()` so the column keeps honoring the reserved space.
+
+---
