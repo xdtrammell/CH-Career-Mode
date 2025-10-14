@@ -892,3 +892,23 @@ They asked for a helper that standardizes label sizing, an updated settings mini
 When introducing new Filters controls, create their labels through `_create_filters_label` and remember to refresh widths plus `_update_size_constraints()` so the column keeps honoring the reserved space.
 
 ---
+# Session 40 — 2025-10-11 15:10
+
+## Topic
+Expanded the Filters label helper to adapt to the widest caption so layout stays in one row.
+
+## User Desires
+The user wanted the Filters captions to remain fully visible beside their spin boxes without wrapping under the controls.
+
+## Specifics of User Desires
+They asked for `_create_filters_label` to track every caption, grow the cached width when encountering longer text, and immediately apply the wider minimum to all labels while refreshing size constraints.
+
+## Actions Taken
+- Updated `gui.py — MainWindow._create_filters_label` to store every Filters label, recalculate the cached width using font metrics, and propagate new minimum widths across the column.
+- Triggered `_update_size_constraints()` whenever the cached Filters label width increases so the settings card minimum reflects the expanded column.
+- Re-ran `python -m compileall ch_career_mode` to ensure the module remains syntactically valid after the helper changes.
+
+## Helpful Hints
+When adding future Filters captions, `_create_filters_label` will automatically widen the column as needed and re-evaluate the overall settings minimum, so reuse it for consistent alignment.
+
+---

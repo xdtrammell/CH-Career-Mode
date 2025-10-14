@@ -1782,13 +1782,25 @@ class MainWindow(QMainWindow):
     def _create_filters_label(self, text: str) -> QLabel:
         """Return a Filters label sized to preserve the column width."""
 
+        if not hasattr(self, "_filters_labels"):
+            self._filters_labels: List[QLabel] = []
+
         label = QLabel(text)
-        width = getattr(self, "_filters_label_min_width", 0)
-        if width <= 0:
-            width = self.fontMetrics().horizontalAdvance("Exclude charts longer than:")
-            self._filters_label_min_width = width
-        label.setMinimumWidth(max(0, width))
         label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        current_width = max(0, getattr(self, "_filters_label_min_width", 0))
+        text_width = self.fontMetrics().horizontalAdvance(text)
+        new_width = max(current_width, text_width)
+        width_changed = new_width != current_width
+        self._filters_label_min_width = new_width
+
+        self._filters_labels.append(label)
+        for stored_label in self._filters_labels:
+            stored_label.setMinimumWidth(new_width)
+
+        if width_changed:
+            self._update_size_constraints()
+
         return label
 
     def _refresh_spinbox_width(
