@@ -126,6 +126,7 @@ WINDOW_MIN_WIDTH = (
     + 2 * MAIN_LAYOUT_MARGIN
 )
 DEFAULT_WINDOW_SIZE = QSize(WINDOW_MIN_WIDTH + 40, WINDOW_MIN_HEIGHT)
+FILTERS_SPINBOX_STANDARD_WIDTH = 170
 
 
 THEME_SETS = {
@@ -1116,6 +1117,7 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
+        self._refresh_spinbox_width(self.spin_artist_limit)
 
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
@@ -1135,6 +1137,7 @@ class MainWindow(QMainWindow):
             self._set_short_song_spinbox_display_from_seconds(stored_exclude_short)
         else:
             self.settings.setValue("exclude_short_songs_seconds", self._short_song_seconds)
+        self._refresh_spinbox_width(self.spin_exclude_short_songs)
 
         if self.settings.contains("exclude_long_songs_minutes"):
             stored_exclude_minutes = self.settings.value("exclude_long_songs_minutes", 60)
@@ -1151,6 +1154,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
+        self._refresh_spinbox_width(self.spin_exclude_long_charts)
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1767,6 +1771,24 @@ class MainWindow(QMainWindow):
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
 
+    def _refresh_spinbox_width(
+        self,
+        spin: Optional[QSpinBox],
+        baseline: int = FILTERS_SPINBOX_STANDARD_WIDTH,
+    ) -> None:
+        """Re-evaluate a spin box width so suffix text remains fully visible."""
+
+        if spin is None:
+            return
+        spin.adjustSize()
+        hint_width = spin.sizeHint().width()
+        target = max(baseline, hint_width if hint_width else baseline)
+        spin.setMinimumWidth(target)
+        spin.updateGeometry()
+        parent = spin.parentWidget()
+        if parent and parent.layout():
+            parent.layout().activate()
+
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
 
@@ -1980,6 +2002,7 @@ class MainWindow(QMainWindow):
             spin.setValue(seconds)
             spin.setProperty("_short_song_unit", "seconds")
         spin.blockSignals(was_blocked)
+        self._refresh_spinbox_width(spin)
 
     def _on_short_song_threshold_changed(self, value: int) -> None:
         """Keep the short-song threshold consistent when crossing unit boundaries."""

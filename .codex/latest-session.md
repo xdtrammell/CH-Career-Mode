@@ -848,3 +848,24 @@ They requested a minimal change limited to increasing the right-side padding ins
 Future suffix changes should continue to use the shared stylesheet so spacing remains consistent across spin boxes; further clipping issues can be addressed by tweaking padding rather than altering control widths.
 
 ---
+
+# Session 38 — 2025-10-11 13:05
+
+## Topic
+Restored adaptive Filters spin box sizing so expanded suffix padding no longer truncates text.
+
+## User Desires
+The user wanted the “seconds” and “minutes” suffixes to remain fully visible after the padding increase while keeping the Filters controls aligned at a consistent width.
+
+## Specifics of User Desires
+They asked for a shared Filters spin box width baseline plus a helper that recalculates minimum widths whenever values or suffixes change, ensuring the padding adjustment does not collapse the text area.
+
+## Actions Taken
+- Added `FILTERS_SPINBOX_STANDARD_WIDTH` in `gui.py` and introduced `_refresh_spinbox_width` alongside `_configure_spinboxes` to recompute minimum widths based on size hints.
+- Invoked the new helper for `spin_artist_limit`, `spin_exclude_short_songs`, and `spin_exclude_long_charts` during initialization and after suffix toggles so both seconds and minutes displays render completely.
+- Updated `_set_short_song_spinbox_display_from_seconds` to refresh its control width after each unit swap, preventing padding-induced clipping.
+
+## Helpful Hints
+Whenever Filters spin box content changes, call `_refresh_spinbox_width` to sync the control’s minimum width with the new size hint so future style tweaks (like padding) cannot reintroduce truncation.
+
+---
