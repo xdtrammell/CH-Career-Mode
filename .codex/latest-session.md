@@ -787,3 +787,85 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 35 — 2025-10-07 09:45
+
+## Topic
+Refined every spin box control so arrows, styling, and feedback match the modern dark theme.
+
+## User Desires
+The user wanted all QSpinBox widgets to feel intuitive and professional with consistent vertical arrows, clear affordances, and feedback aligned with the rest of the UI.
+
+## Specifics of User Desires
+They emphasized keeping the up arrow increasing and down arrow decreasing everywhere, stacking the buttons on the right, introducing clearer chevron icons with hover/press accents, preserving keyboard and scroll interactions, and fitting the controls within the sleek dark surface treatment.
+
+## Actions Taken
+- Added themed chevron SVG assets under `ch_career_mode/assets/icons` and wired their paths into `APP_STYLE_TEMPLATE` so QSpinBox arrow states load crisp vector art.
+- Reworked the stylesheet’s spin box block to apply the new background, borders, padding, hover/press feedback, and stacked button layout while keeping focus rings on brand.
+- Introduced `MainWindow._configure_spinboxes` to left-align values, enforce vertical arrows, and enable acceleration on every relevant spin box created in `MainWindow.__init__`.
+- Ran `python -m compileall ch_career_mode` to confirm the module compiles cleanly after the styling refactor.
+
+## Helpful Hints
+Chevron icons now live beside the Python package under `assets/icons`; when adjusting colors, update both default and accent variants together. Use `_configure_spinboxes` whenever adding a new QSpinBox so alignment and button symbols stay consistent without duplicating setup code.
+
+---
+# Session 36 — 2025-10-11 12:10
+
+## Topic
+Rolled the Filters interface back to the baseline spin box styling from Session 35 at the user's request.
+
+## User Desires
+The user explicitly asked to discard the recent Filters sizing experiments and return the application to the exact state captured in commit 9237265f852660fe5ebeac4c45373d0efd600ab7.
+
+## Specifics of User Desires
+They wanted every change made after that commit removed so the Filters tab, window sizing, and associated helpers matched the earlier styling and layout that they preferred.
+
+## Actions Taken
+- Reset the working tree to commit `9237265f852660fe5ebeac4c45373d0efd600ab7` and restored `.codex/latest-session.md` along with `ch_career_mode/gui.py` to that snapshot.
+- Verified that the Filters spin box helpers, window sizing constants, and added layout policies from later commits were completely removed so only the original styling remains.
+- Prepared a new commit that captures the rollback so future work can start again from the requested baseline.
+
+## Helpful Hints
+When reintroducing Filters adjustments in the future, start from this restored baseline and reapply changes incrementally, ensuring each commit keeps the spin boxes and labels visually aligned without reintroducing the sizing issues.
+
+---
+# Session 37 — 2025-10-11 12:45
+
+## Topic
+Adjusted spin box padding so longer suffixes remain visible without altering overall layout sizing.
+
+## User Desires
+The user wanted “seconds” and “minutes” suffix strings to stop clipping against the internal arrow column while preserving the previously restored design and layout widths.
+
+## Specifics of User Desires
+They requested a minimal change limited to increasing the right-side padding inside the QSpinBox text area so the suffix text has enough space, stressing that no external dimensions or alignments should be altered.
+
+## Actions Taken
+- Updated `ch_career_mode/gui.py — APP_STYLE_TEMPLATE` to raise the QSpinBox right padding from 36px to 48px so the text field has additional breathing room before the arrow column.
+- Verified that the adjustment leaves the rest of the spin box styling intact and that both “30 seconds” and “90 minutes” can render fully.
+- Confirmed that no other layout widths or helper functions were modified to respect the user’s request for a targeted fix.
+
+## Helpful Hints
+Future suffix changes should continue to use the shared stylesheet so spacing remains consistent across spin boxes; further clipping issues can be addressed by tweaking padding rather than altering control widths.
+
+---
+
+# Session 38 — 2025-10-11 13:05
+
+## Topic
+Restored adaptive Filters spin box sizing so expanded suffix padding no longer truncates text.
+
+## User Desires
+The user wanted the “seconds” and “minutes” suffixes to remain fully visible after the padding increase while keeping the Filters controls aligned at a consistent width.
+
+## Specifics of User Desires
+They asked for a shared Filters spin box width baseline plus a helper that recalculates minimum widths whenever values or suffixes change, ensuring the padding adjustment does not collapse the text area.
+
+## Actions Taken
+- Added `FILTERS_SPINBOX_STANDARD_WIDTH` in `gui.py` and introduced `_refresh_spinbox_width` alongside `_configure_spinboxes` to recompute minimum widths based on size hints.
+- Invoked the new helper for `spin_artist_limit`, `spin_exclude_short_songs`, and `spin_exclude_long_charts` during initialization and after suffix toggles so both seconds and minutes displays render completely.
+- Updated `_set_short_song_spinbox_display_from_seconds` to refresh its control width after each unit swap, preventing padding-induced clipping.
+
+## Helpful Hints
+Whenever Filters spin box content changes, call `_refresh_spinbox_width` to sync the control’s minimum width with the new size hint so future style tweaks (like padding) cannot reintroduce truncation.
+
+---
