@@ -787,3 +787,24 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 35 — 2025-10-07 11:05
+
+## Topic
+Refresh QSpinBox styling and ergonomics to clarify controls within the dark Fluent theme.
+
+## User Desires
+The user wanted every spin box in the application to present unambiguous vertical arrows that always increase upward, match the modern dark aesthetic, and provide clear hover, focus, and pressed feedback.
+
+## Specifics of User Desires
+They specified vertically stacked arrow segments inset on the right, chevron icons that brighten on hover, accent-focused borders, left-aligned values with space for suffixes, and consistent behavior for mouse, keyboard, and scroll interactions without ever reversing direction.
+
+## Actions Taken
+- Updated `gui.py — APP_STYLE_TEMPLATE` to restyle QSpinBox widgets with rounded dark shells, accent focus borders, stacked button columns, modern SVG chevrons, and hover/pressed feedback that mirrors the requested palette.
+- Added `gui.py — MainWindow._configure_spinbox` to centralize left alignment, up/down button symbols, and optional width guarantees for spin boxes that display unit suffixes.
+- Applied the new helper across every spin box instance in `MainWindow.__init__`, ensuring unit-based controls reserve enough width for their suffixes while keeping keyboard and scroll behavior unchanged.
+- Recompiled the package with `python -m compileall ch_career_mode` to confirm the GUI module remains syntax-valid after the stylesheet and helper updates.
+
+## Helpful Hints
+Use `_configure_spinbox` when introducing new numeric inputs so they inherit the shared alignment and arrow layout, and adjust the `minimum_width` parameter whenever a suffix or large numeric range risks overlapping the chevron column.
+
+---

@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSpinBox,
+    QAbstractSpinBox,
     QCheckBox,
     QLineEdit,
     QFormLayout,
@@ -296,15 +297,88 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
-    background-color: rgba(10, 12, 18, 0.6);
+QLineEdit, QComboBox {{
+    background-color: #1b1f2d;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+QLineEdit:focus, QComboBox:focus {{
     border-color: {accent};
+}}
+QSpinBox {{
+    background-color: #1b1f2d;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 38px 6px 12px;
+    color: #f4f6fb;
+}}
+QSpinBox:hover {{
+    border-color: rgba(94, 129, 255, 0.35);
+}}
+QSpinBox:focus {{
+    border-color: rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:disabled {{
+    color: rgba(244, 246, 251, 0.35);
+    border-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(20, 24, 36, 0.6);
+}}
+QSpinBox::up-button,
+QSpinBox::down-button {{
+    subcontrol-origin: border;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.02);
+    width: 26px;
+    padding: 0;
+    margin: 0;
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-top-right-radius: 8px;
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+}}
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {{
+    background-color: rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled {{
+    border-left-color: rgba(255, 255, 255, 0.03);
+    border-top-color: rgba(255, 255, 255, 0.03);
+}}
+QSpinBox::up-arrow {{
+    width: 14px;
+    height: 8px;
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23f4f6fb' fill-opacity='0.75' d='M8 5l4 5H4z'/></svg>");
+}}
+QSpinBox::down-arrow {{
+    width: 14px;
+    height: 8px;
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23f4f6fb' fill-opacity='0.75' d='M4 6l4 5 4-5z'/></svg>");
+}}
+QSpinBox::up-arrow:hover,
+QSpinBox::up-arrow:pressed {{
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%235e81ff' d='M8 5l4 5H4z'/></svg>");
+}}
+QSpinBox::down-arrow:hover,
+QSpinBox::down-arrow:pressed {{
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%235e81ff' d='M4 6l4 5 4-5z'/></svg>");
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23b6bdd6' fill-opacity='0.35' d='M8 5l4 5H4z'/></svg>");
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23b6bdd6' fill-opacity='0.35' d='M4 6l4 5 4-5z'/></svg>");
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
@@ -995,9 +1069,11 @@ class MainWindow(QMainWindow):
         self.diff_min = QSpinBox()
         self.diff_min.setRange(0, 9)
         self.diff_min.setValue(0)
+        self._configure_spinbox(self.diff_min)
         self.diff_max = QSpinBox()
         self.diff_max.setRange(0, 9)
         self.diff_max.setValue(9)
+        self._configure_spinbox(self.diff_max)
 
         self.chk_longrule = QCheckBox("Keep >7:00 out of first two tiers")
         self.chk_longrule.setChecked(True)
@@ -1018,11 +1094,13 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
+        self._configure_spinbox(self.spin_artist_limit)
 
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
+        self._configure_spinbox(self.spin_exclude_short_songs, minimum_width=156)
         default_short_seconds = 30
         raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
         has_short_setting = self.settings.contains("exclude_short_songs_seconds")
@@ -1053,10 +1131,12 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
+        self._configure_spinbox(self.spin_exclude_long_charts, minimum_width=156)
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
         self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
+        self._configure_spinbox(self.spin_min_diff)
 
         self.folder_status_indicator = QLabel()
         self.folder_status_indicator.setFixedSize(12, 12)
@@ -1088,9 +1168,11 @@ class MainWindow(QMainWindow):
         clamped_tier_count = max(1, min(20, stored_tier_count))
         self.spin_tiers.setValue(clamped_tier_count)
         self.settings.setValue("tier_count", clamped_tier_count)
+        self._configure_spinbox(self.spin_tiers)
         self.spin_songs_per = QSpinBox()
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
+        self._configure_spinbox(self.spin_songs_per)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
 
         self.theme_combo = QComboBox()
@@ -1647,6 +1729,18 @@ class MainWindow(QMainWindow):
         effect.setOffset(x, y)
         effect.setColor(QColor(0, 0, 0, max(0, min(255, alpha))))
         widget.setGraphicsEffect(effect)
+
+    def _configure_spinbox(
+        self, spin: Optional[QSpinBox], *, minimum_width: Optional[int] = None
+    ) -> None:
+        """Standardize alignment, button layout, and width for spin boxes."""
+
+        if spin is None:
+            return
+        spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+        if minimum_width is not None:
+            spin.setMinimumWidth(minimum_width)
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
