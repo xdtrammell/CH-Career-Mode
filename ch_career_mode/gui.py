@@ -59,6 +59,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QStackedWidget,
     QMenu,
+    QAbstractSpinBox,
 )
 import shiboken6
 
@@ -203,6 +204,32 @@ ACCENT_COLOR = "#5e81ff"
 ACCENT_COLOR_HOVER = "#7b96ff"
 SURFACE_COLOR = "#181b23"
 SURFACE_ELEVATED = "#1f2633"
+SPINBOX_SURFACE_COLOR = "#1b2130"
+
+SPIN_ARROW_UP = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%23f4f6fb' fill-opacity='0.75' d='M12 8.25l4.75 5.25h-9.5z'/>" "</svg>"
+)
+SPIN_ARROW_UP_HOVER = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%235e81ff' d='M12 8.25l4.75 5.25h-9.5z'/>" "</svg>"
+)
+SPIN_ARROW_UP_DISABLED = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%23f4f6fb' fill-opacity='0.35' d='M12 8.25l4.75 5.25h-9.5z'/>" "</svg>"
+)
+SPIN_ARROW_DOWN = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%23f4f6fb' fill-opacity='0.75' d='M12 15.75l-4.75-5.25h9.5z'/>" "</svg>"
+)
+SPIN_ARROW_DOWN_HOVER = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%235e81ff' d='M12 15.75l-4.75-5.25h9.5z'/>" "</svg>"
+)
+SPIN_ARROW_DOWN_DISABLED = (
+    "data:image/svg+xml;utf8," "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'>"
+    "<path fill='%23f4f6fb' fill-opacity='0.35' d='M12 15.75l-4.75-5.25h9.5z'/>" "</svg>"
+)
 SCAN_PHASE1_COLOR = "#5A73FF"
 SCAN_PHASE2_COLOR = "#9E6FFF"
 SCAN_PHASE_HEADER_COLOR = "#A5D6FF"
@@ -296,15 +323,100 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
+QLineEdit, QComboBox {{
     background-color: rgba(10, 12, 18, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 6px 10px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+QLineEdit:focus, QComboBox:focus {{
     border-color: {accent};
+}}
+QSpinBox {{
+    background-color: {spin_surface};
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 12px;
+    padding-right: 44px;
+    min-height: 32px;
+    color: #f4f6fb;
+    selection-background-color: rgba(94, 129, 255, 0.35);
+}}
+QSpinBox:focus {{
+    border: 1px solid rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:disabled {{
+    color: rgba(244, 246, 251, 0.45);
+    border-color: rgba(255, 255, 255, 0.03);
+}}
+QSpinBox::up-button,
+QSpinBox::down-button {{
+    subcontrol-origin: padding;
+    width: 32px;
+    margin: 3px 3px 3px 0;
+    padding: 0;
+    background-color: transparent;
+    border: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 3px;
+    padding-bottom: 1px;
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: 6px;
+    border-top-right-radius: 0;
+    padding-top: 1px;
+    padding-bottom: 3px;
+}}
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+}}
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {{
+    background-color: rgba(94, 129, 255, 0.22);
+    border-left-color: rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::up-button:pressed {{
+    border-bottom-color: rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled {{
+    background-color: transparent;
+    border-left-color: rgba(255, 255, 255, 0.04);
+}}
+QSpinBox::up-arrow {{
+    image: url({spin_up_icon});
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+}}
+QSpinBox::up-arrow:hover,
+QSpinBox::up-arrow:pressed {{
+    image: url({spin_up_hover});
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url({spin_up_disabled});
+}}
+QSpinBox::down-arrow {{
+    image: url({spin_down_icon});
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+}}
+QSpinBox::down-arrow:hover,
+QSpinBox::down-arrow:pressed {{
+    image: url({spin_down_hover});
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url({spin_down_disabled});
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
@@ -935,6 +1047,13 @@ class MainWindow(QMainWindow):
                 accent=ACCENT_COLOR,
                 accent_hover=ACCENT_COLOR_HOVER,
                 surface=SURFACE_COLOR,
+                spin_surface=SPINBOX_SURFACE_COLOR,
+                spin_up_icon=SPIN_ARROW_UP,
+                spin_up_hover=SPIN_ARROW_UP_HOVER,
+                spin_up_disabled=SPIN_ARROW_UP_DISABLED,
+                spin_down_icon=SPIN_ARROW_DOWN,
+                spin_down_hover=SPIN_ARROW_DOWN_HOVER,
+                spin_down_disabled=SPIN_ARROW_DOWN_DISABLED,
             )
         )
 
@@ -993,9 +1112,11 @@ class MainWindow(QMainWindow):
         self.sort_mode_combo.addItem("Song Title (A→Z)", "title")
 
         self.diff_min = QSpinBox()
+        self._prepare_spinbox(self.diff_min)
         self.diff_min.setRange(0, 9)
         self.diff_min.setValue(0)
         self.diff_max = QSpinBox()
+        self._prepare_spinbox(self.diff_max)
         self.diff_max.setRange(0, 9)
         self.diff_max.setValue(9)
 
@@ -1016,10 +1137,12 @@ class MainWindow(QMainWindow):
 
         saved_artist_limit = int(self.settings.value("artist_limit", 1)) if self.settings.contains("artist_limit") else 1
         self.spin_artist_limit = QSpinBox()
+        self._prepare_spinbox(self.spin_artist_limit)
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
 
         self.spin_exclude_short_songs = QSpinBox()
+        self._prepare_spinbox(self.spin_exclude_short_songs, minimum_width=132)
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
@@ -1048,12 +1171,14 @@ class MainWindow(QMainWindow):
             stored_exclude_minutes = 60
         stored_exclude_minutes = max(5, min(300, stored_exclude_minutes))
         self.spin_exclude_long_charts = QSpinBox()
+        self._prepare_spinbox(self.spin_exclude_long_charts, minimum_width=132)
         self.spin_exclude_long_charts.setRange(5, 300)
         self.spin_exclude_long_charts.setSingleStep(5)
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
         self.spin_min_diff = QSpinBox()
+        self._prepare_spinbox(self.spin_min_diff)
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
         self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
@@ -1079,6 +1204,7 @@ class MainWindow(QMainWindow):
         self.chk_artist_career_mode.setChecked(artist_mode_setting)
 
         self.spin_tiers = QSpinBox()
+        self._prepare_spinbox(self.spin_tiers)
         self.spin_tiers.setRange(1, 20)
         stored_tier_count = self.settings.value("tier_count", 9)
         try:
@@ -1089,6 +1215,7 @@ class MainWindow(QMainWindow):
         self.spin_tiers.setValue(clamped_tier_count)
         self.settings.setValue("tier_count", clamped_tier_count)
         self.spin_songs_per = QSpinBox()
+        self._prepare_spinbox(self.spin_songs_per)
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
@@ -1384,6 +1511,17 @@ class MainWindow(QMainWindow):
         self._sync_external_tier_scrollbar()
         QTimer.singleShot(0, self._sync_all_tier_heights)
         QTimer.singleShot(0, self._refresh_workflow_buttons_and_update)
+
+    def _prepare_spinbox(self, spin: QSpinBox, *, minimum_width: int = 0) -> None:
+        """Apply consistent alignment, behavior, and sizing to spin boxes."""
+        spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+        spin.setAccelerated(True)
+        if minimum_width > 0:
+            spin.setMinimumWidth(minimum_width)
+        else:
+            spin.setMinimumWidth(96)
+        spin.setMinimumHeight(32)
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
