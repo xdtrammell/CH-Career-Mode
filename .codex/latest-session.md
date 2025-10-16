@@ -787,3 +787,23 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 39 — 2025-10-16 07:01
+
+## Topic
+Rolled the repository back to the previously requested baseline snapshot so the Filters panel returns to its earlier layout.
+
+## User Desires
+The user asked to undo the recent spin box sizing work and revert the codebase to the state stored in commit 9237265f852660fe5ebeac4c45373d0efd600ab7.
+
+## Specifics of User Desires
+They were dissatisfied with the latest adaptive width adjustments because Filters labels disappeared, and they explicitly referenced commit 9237265f852660fe5ebeac4c45373d0efd600ab7 as the desired restoration point.
+
+## Actions Taken
+- Used `git revert HEAD` to undo commit 4a4a82dd8427934c24c850764ecd0d11b565ac4b, which removed the adaptive Filters spin box logic and related assets.
+- Confirmed that `ch_career_mode/gui.py` and the asset bundle now match the earlier baseline without the new width helper or chevron SVGs.
+- Prepared to document the rollback so future contributors know why the revert was performed.
+
+## Helpful Hints
+Future width experiments should reserve space for Filters labels before tightening spin box padding; returning to the earlier snapshot ensures a consistent starting point for any follow-up adjustments.
+
+---
