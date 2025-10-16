@@ -71,6 +71,10 @@ pip install -r requirements.txt
 python -m ch_career_mode
 ```
 
+### Troubleshooting
+
+- **`ModuleNotFoundError: No module named 'PySide6'`** – Install the GUI dependencies with `pip install -r requirements.txt`. The launcher checks for PySide6 at startup and will raise this error until Qt is available.
+
 ### Executable build (optional)
 
 You can bundle the project into a standalone `.exe` with **PyInstaller**:

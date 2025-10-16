@@ -848,3 +848,23 @@ They asked for a reliable way to keep the suffix text readable, suggesting short
 Invoke `_configure_filter_spinbox_widths` after any future suffix or range adjustments so the spin boxes recalculate their minimum widths automatically.
 
 ---
+# Session 38 — 2025-10-16 08:20
+
+## Topic
+Hardened the launcher against missing PySide6 installations and documented the required dependency for the GUI entry point.
+
+## User Desires
+The user ran the desktop entry script and encountered a `ModuleNotFoundError` for PySide6, so they wanted guidance or code adjustments that keep the application from crashing unexpectedly.
+
+## Specifics of User Desires
+They explicitly shared the traceback raised while executing `CH_Career_Mode_Setlist_Gen.py`, highlighting that the package import chain failed before any helpful instructions about installing PySide6 appeared.
+
+## Actions Taken
+- Updated `ch_career_mode.__init__` so `MainWindow` is loaded lazily, allowing the package to import even when Qt has not been installed yet.
+- Added a `_ensure_pyside_available` check in `ch_career_mode.__main__` that raises a clearer error message before the GUI modules load, and moved the Qt imports inside `main()`.
+- Documented the PySide6 installation step in the README troubleshooting section so users know to install requirements if they see the missing module error.
+
+## Helpful Hints
+If additional optional Qt components are ever introduced, add them to the dependency check helper so the launcher keeps warning users before the GUI attempts to import them.
+
+---
