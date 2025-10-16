@@ -1771,22 +1771,32 @@ class MainWindow(QMainWindow):
     def _configure_filter_spinbox_widths(self) -> None:
         """Ensure filter spin boxes expose enough width for their suffix text."""
 
-        longest_short = max(len("600 seconds"), len("10 minutes"))
-        longest_long = len("300 minutes")
+        def _apply_width(spin: Optional[QSpinBox], samples: List[str]) -> None:
+            if spin is None or not samples:
+                return
+
+            line_edit = spin.lineEdit()
+            metrics = line_edit.fontMetrics() if line_edit is not None else spin.fontMetrics()
+            text_width = max(metrics.horizontalAdvance(sample) for sample in samples)
+
+            if line_edit is not None:
+                margins: QMargins = line_edit.textMargins()
+                text_width += margins.left() + margins.right()
+
+            style = spin.style() or QApplication.style()
+            frame_width = style.pixelMetric(QStyle.PM_DefaultFrameWidth, None, spin)
+            button_width = style.pixelMetric(QStyle.PM_SpinBoxButtonWidth, None, spin)
+            total_width = text_width + frame_width * 2 + button_width + 6
+
+            if total_width > spin.minimumWidth():
+                spin.setMinimumWidth(total_width)
+            spin.setSizeAdjustPolicy(QAbstractSpinBox.SizeAdjustPolicy.AdjustToContents)
 
         short_spin = getattr(self, "spin_exclude_short_songs", None)
-        if short_spin is not None:
-            short_spin.setMinimumContentsLength(longest_short)
-            short_spin.setSizeAdjustPolicy(
-                QAbstractSpinBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
-            )
+        _apply_width(short_spin, ["600 seconds", "10 minutes"])
 
         long_spin = getattr(self, "spin_exclude_long_charts", None)
-        if long_spin is not None:
-            long_spin.setMinimumContentsLength(longest_long)
-            long_spin.setSizeAdjustPolicy(
-                QAbstractSpinBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
-            )
+        _apply_width(long_spin, ["300 minutes"])
 
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""

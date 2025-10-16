@@ -868,3 +868,23 @@ They explicitly shared the traceback raised while executing `CH_Career_Mode_Setl
 If additional optional Qt components are ever introduced, add them to the dependency check helper so the launcher keeps warning users before the GUI attempts to import them.
 
 ---
+# Session 39 — 2025-10-16 09:05
+
+## Topic
+Reworked the filter spin box sizing helper so it remains compatible with PySide6 while keeping suffix text readable.
+
+## User Desires
+After installing PySide6, the user hit an AttributeError tied to the new sizing helper and needed the GUI to launch without errors.
+
+## Specifics of User Desires
+They provided the traceback showing `setMinimumContentsLength` was unavailable on `QSpinBox`, implying the width logic had to be rewritten using APIs that PySide6 exposes to maintain the wider display.
+
+## Actions Taken
+- Replaced the `setMinimumContentsLength` calls in `gui.py — MainWindow._configure_filter_spinbox_widths` with pixel-width calculations based on font metrics and style hints.
+- Ensured both filter spin boxes compute minimum widths from representative samples so their suffix text stays visible regardless of the active unit.
+- Verified the updated helper compiles cleanly by running `python -m compileall ch_career_mode` before wrapping up the session.
+
+## Helpful Hints
+If future unit labels grow longer, extend the sample strings in `_configure_filter_spinbox_widths` so the computed minimum width reflects the largest possible display text.
+
+---
