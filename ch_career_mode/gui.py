@@ -1151,6 +1151,7 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
+        self._configure_filter_spinbox_widths()
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
@@ -1767,6 +1768,26 @@ class MainWindow(QMainWindow):
             spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
             spin.setAccelerated(True)
 
+    def _configure_filter_spinbox_widths(self) -> None:
+        """Ensure filter spin boxes expose enough width for their suffix text."""
+
+        longest_short = max(len("600 seconds"), len("10 minutes"))
+        longest_long = len("300 minutes")
+
+        short_spin = getattr(self, "spin_exclude_short_songs", None)
+        if short_spin is not None:
+            short_spin.setMinimumContentsLength(longest_short)
+            short_spin.setSizeAdjustPolicy(
+                QAbstractSpinBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+
+        long_spin = getattr(self, "spin_exclude_long_charts", None)
+        if long_spin is not None:
+            long_spin.setMinimumContentsLength(longest_long)
+            long_spin.setSizeAdjustPolicy(
+                QAbstractSpinBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+
     def _refresh_workflow_button_minimums(self) -> None:
         """Ensure workflow buttons expose up-to-date minimum widths."""
 
@@ -1979,6 +2000,7 @@ class MainWindow(QMainWindow):
             spin.setSuffix(" seconds")
             spin.setValue(seconds)
             spin.setProperty("_short_song_unit", "seconds")
+        self._configure_filter_spinbox_widths()
         spin.blockSignals(was_blocked)
 
     def _on_short_song_threshold_changed(self, value: int) -> None:

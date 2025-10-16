@@ -828,3 +828,23 @@ They emphasized that the GUI styling and supporting assets should be identical t
 If follow-up work needs to reintroduce the reverted styling, branch from this commit so the baseline remains untouched.
 
 ---
+# Session 37 — 2025-10-16 07:45
+
+## Topic
+Adjusted the filter spin boxes so their suffix text remains fully visible after reverting to the earlier UI baseline.
+
+## User Desires
+The user wanted the "seconds" and "minutes" suffix labels in the Filters tab spin boxes to stop getting clipped inside their frames.
+
+## Specifics of User Desires
+They asked for a reliable way to keep the suffix text readable, suggesting shorter labels but preferring whatever approach ensured the controls display the complete units regardless of layout changes.
+
+## Actions Taken
+- Added a `_configure_filter_spinbox_widths` helper in `MainWindow` to assign a minimum contents length and size-adjust policy tailored to the longest suffix text.
+- Called the helper when creating the filter spin boxes and each time `_set_short_song_spinbox_display_from_seconds` swaps between seconds and minutes.
+- Verified through Qt size hints that both spin boxes now reserve enough width for their respective suffixes before committing the change.
+
+## Helpful Hints
+Invoke `_configure_filter_spinbox_widths` after any future suffix or range adjustments so the spin boxes recalculate their minimum widths automatically.
+
+---
