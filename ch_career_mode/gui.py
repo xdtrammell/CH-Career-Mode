@@ -46,6 +46,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QStyledItemDelegate,
     QAbstractItemView,
+    QAbstractSpinBox,
     QGridLayout,
     QSizePolicy,
     QStyle,
@@ -203,6 +204,24 @@ ACCENT_COLOR = "#5e81ff"
 ACCENT_COLOR_HOVER = "#7b96ff"
 SURFACE_COLOR = "#181b23"
 SURFACE_ELEVATED = "#1f2633"
+SPINBOX_ARROW_UP = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjRjRGNkZCQkYnIGQ9J00xMiA4LjVsNC45NSA0Ljk1LTEuNDE0IDEuNDE0TDEyIDExLjMyOGwtMy41MzYgMy41MzYtMS40MTQtMS40MTR6Jy8+Cjwvc3ZnPgo="
+)
+SPINBOX_ARROW_DOWN = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjRjRGNkZCQkYnIGQ9J00xMiAxNS41IDcuMDUgMTAuNTVsMS40MTQtMS40MTRMMTIgMTIuNjcybDMuNTM2LTMuNTM2IDEuNDE0IDEuNDE0eicvPgo8L3N2Zz4K"
+)
+SPINBOX_ARROW_UP_HOVER = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjNWU4MWZmJyBkPSdNMTIgOC41bDQuOTUgNC45NS0xLjQxNCAxLjQxNEwxMiAxMS4zMjhsLTMuNTM2IDMuNTM2LTEuNDE0LTEuNDE0eicvPgo8L3N2Zz4K"
+)
+SPINBOX_ARROW_DOWN_HOVER = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjNWU4MWZmJyBkPSdNMTIgMTUuNSA3LjA1IDEwLjU1bDEuNDE0LTEuNDE0TDEyIDEyLjY3MmwzLjUzNi0zLjUzNiAxLjQxNCAxLjQxNHonLz4KPC9zdmc+Cg=="
+)
+SPINBOX_ARROW_UP_DISABLED = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjRjRGNkZCNTknIGQ9J00xMiA4LjVsNC45NSA0Ljk1LTEuNDE0IDEuNDE0TDEyIDExLjMyOGwtMy41MzYgMy41MzYtMS40MTQtMS40MTR6Jy8+Cjwvc3ZnPgo="
+)
+SPINBOX_ARROW_DOWN_DISABLED = (
+    "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPScyNCcgaGVpZ2h0PScyNCcgdmlld0JveD0nMCAwIDI0IDI0Jz4KICA8cGF0aCBmaWxsPScjRjRGNkZCNTknIGQ9J00xMiAxNS41IDcuMDUgMTAuNTVsMS40MTQtMS40MTRMMTIgMTIuNjcybDMuNTM2LTMuNTM2IDEuNDE0IDEuNDE0eicvPgo8L3N2Zz4K"
+)
 SCAN_PHASE1_COLOR = "#5A73FF"
 SCAN_PHASE2_COLOR = "#9E6FFF"
 SCAN_PHASE_HEADER_COLOR = "#A5D6FF"
@@ -296,15 +315,103 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
+QLineEdit, QComboBox {{
     background-color: rgba(10, 12, 18, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 6px 10px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
+QLineEdit:focus, QComboBox:focus {{
     border-color: {accent};
+}}
+
+QSpinBox {{
+    background-color: #1c2233;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 36px 6px 12px;
+    color: #f4f6fb;
+    selection-background-color: rgba(94, 129, 255, 0.28);
+}}
+QSpinBox:focus {{
+    border: 1px solid rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:disabled {{
+    color: rgba(244, 246, 251, 0.4);
+    background-color: rgba(26, 30, 43, 0.4);
+    border-color: rgba(255, 255, 255, 0.04);
+}}
+QSpinBox::edit-field {{
+    padding: 0;
+    margin-right: 4px;
+}}
+QSpinBox::up-button,
+QSpinBox::down-button {{
+    subcontrol-origin: border;
+    width: 28px;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    height: 50%;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 0;
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    height: 50%;
+    border-bottom-right-radius: 8px;
+    border-top-right-radius: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+}}
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {{
+    background-color: rgba(94, 129, 255, 0.22);
+    border-left-color: rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::down-button:pressed {{
+    border-top-color: rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled {{
+    background-color: transparent;
+    border-left-color: rgba(255, 255, 255, 0.04);
+}}
+QSpinBox::down-button:disabled {{
+    border-top-color: rgba(255, 255, 255, 0.04);
+}}
+QSpinBox::up-arrow,
+QSpinBox::down-arrow {{
+    width: 14px;
+    height: 14px;
+}}
+QSpinBox::up-arrow {{
+    image: url({spin_arrow_up});
+}}
+QSpinBox::down-arrow {{
+    image: url({spin_arrow_down});
+}}
+QSpinBox::up-arrow:hover,
+QSpinBox::up-arrow:pressed {{
+    image: url({spin_arrow_up_hover});
+}}
+QSpinBox::down-arrow:hover,
+QSpinBox::down-arrow:pressed {{
+    image: url({spin_arrow_down_hover});
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url({spin_arrow_up_disabled});
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url({spin_arrow_down_disabled});
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
@@ -935,6 +1042,12 @@ class MainWindow(QMainWindow):
                 accent=ACCENT_COLOR,
                 accent_hover=ACCENT_COLOR_HOVER,
                 surface=SURFACE_COLOR,
+                spin_arrow_up=SPINBOX_ARROW_UP,
+                spin_arrow_down=SPINBOX_ARROW_DOWN,
+                spin_arrow_up_hover=SPINBOX_ARROW_UP_HOVER,
+                spin_arrow_down_hover=SPINBOX_ARROW_DOWN_HOVER,
+                spin_arrow_up_disabled=SPINBOX_ARROW_UP_DISABLED,
+                spin_arrow_down_disabled=SPINBOX_ARROW_DOWN_DISABLED,
             )
         )
 
@@ -1092,6 +1205,35 @@ class MainWindow(QMainWindow):
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
+
+        configured_spins = [
+            self.diff_min,
+            self.diff_max,
+            self.spin_artist_limit,
+            self.spin_exclude_short_songs,
+            self.spin_exclude_long_charts,
+            self.spin_min_diff,
+            self.spin_tiers,
+            self.spin_songs_per,
+        ]
+        for spin in configured_spins:
+            spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+            spin.setAccelerated(True)
+            spin.setMinimumHeight(32)
+
+        for spin in (self.spin_exclude_short_songs, self.spin_exclude_long_charts):
+            spin.setMinimumWidth(140)
+
+        for spin in (
+            self.diff_min,
+            self.diff_max,
+            self.spin_artist_limit,
+            self.spin_min_diff,
+            self.spin_tiers,
+            self.spin_songs_per,
+        ):
+            spin.setMinimumWidth(100)
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["None (Custom Tier Names)"] + list(THEME_SETS.keys()) + ["Procedural - Rock Tour"])

@@ -787,3 +787,23 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 35 — 2025-10-07 12:10
+
+## Topic
+Revamped every spin box to present intuitive vertical controls that match the application's dark material aesthetic.
+
+## User Desires
+The user asked for consistent up-increases/down-decreases behavior with clearly separated vertical arrow buttons and modern styling across all QSpinBox widgets.
+
+## Specifics of User Desires
+They wanted vertically stacked chevron buttons on the right edge, hover and pressed feedback aligned with the accent palette, left-aligned values with suffixed units, and confirmation that keyboard and scroll interactions matched the visual cues.
+
+## Actions Taken
+- Added inline SVG data constants and expanded `APP_STYLE_TEMPLATE` in `gui.py` to define the new QSpinBox background, borders, arrow column, hover/pressed states, and disabled treatments.
+- Updated the `MainWindow.__init__` stylesheet formatting call to feed the new arrow assets and applied uniform alignment, sizing, and button-symbol settings for every spin box constructed there.
+- Verified the refactor still compiles by running `python -m compileall ch_career_mode`.
+
+## Helpful Hints
+Adjust the SVG constants at the top of `gui.py` when iterating on arrow icon weights or colors; the same constants feed all spin boxes through `APP_STYLE_TEMPLATE`, so replacements propagate automatically.
+
+---
