@@ -1777,16 +1777,19 @@ class MainWindow(QMainWindow):
 
             line_edit = spin.lineEdit()
             metrics = line_edit.fontMetrics() if line_edit is not None else spin.fontMetrics()
-            text_width = max(metrics.horizontalAdvance(sample) for sample in samples)
-
+            margin_total = 0
             if line_edit is not None:
                 margins: QMargins = line_edit.textMargins()
-                text_width += margins.left() + margins.right()
+                margin_total = margins.left() + margins.right()
 
-            style = spin.style() or QApplication.style()
-            frame_width = style.pixelMetric(QStyle.PM_DefaultFrameWidth, None, spin)
-            button_width = style.pixelMetric(QStyle.PM_SpinBoxButtonWidth, None, spin)
-            total_width = text_width + frame_width * 2 + button_width + 6
+            sample_width = max(metrics.horizontalAdvance(sample) + margin_total for sample in samples)
+
+            base_text = spin.text()
+            base_width = metrics.horizontalAdvance(base_text) + margin_total if base_text else 0
+            size_hint = spin.sizeHint().width()
+            overhead = max(0, size_hint - base_width)
+
+            total_width = sample_width + overhead
 
             if total_width > spin.minimumWidth():
                 spin.setMinimumWidth(total_width)

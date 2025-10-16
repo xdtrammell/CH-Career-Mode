@@ -888,3 +888,23 @@ They provided the traceback showing `setMinimumContentsLength` was unavailable o
 If future unit labels grow longer, extend the sample strings in `_configure_filter_spinbox_widths` so the computed minimum width reflects the largest possible display text.
 
 ---
+# Session 40 — 2025-10-16 09:40
+
+## Topic
+Resolved the PySide6 runtime error triggered by missing spin box style metrics while keeping the filter suffix text readable.
+
+## User Desires
+The user still could not launch the GUI because the helper attempted to access `QStyle.PM_SpinBoxButtonWidth`, so they needed a fix that avoids unsupported Qt constants.
+
+## Specifics of User Desires
+They shared the traceback raised during application start-up, revealing that the code path inside `gui.py — MainWindow._configure_filter_spinbox_widths` relied on a pixel metric that PySide6 does not expose.
+
+## Actions Taken
+- Reworked `gui.py — MainWindow._configure_filter_spinbox_widths` so it now derives minimum widths from font metrics and the widget size hint instead of querying unavailable style constants.
+- Preserved the suffix visibility by accounting for line edit margins and overhead when calculating the spin box minimum width.
+- Recompiled the package with `python -m compileall ch_career_mode` to ensure the updated helper is syntactically valid.
+
+## Helpful Hints
+If future Qt themes or styles alter button padding, update the overhead calculation to sample an initialized spin box after any stylesheet changes for the most accurate width baseline.
+
+---
