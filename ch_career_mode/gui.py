@@ -9,6 +9,7 @@ import sys
 import time
 from typing import Dict, List, Optional, cast
 from dataclasses import replace
+from urllib.parse import quote
 
 from PySide6.QtCore import (
     Qt,
@@ -44,6 +45,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QScrollArea,
     QComboBox,
+    QAbstractSpinBox,
     QStyledItemDelegate,
     QAbstractItemView,
     QGridLayout,
@@ -203,6 +205,44 @@ ACCENT_COLOR = "#5e81ff"
 ACCENT_COLOR_HOVER = "#7b96ff"
 SURFACE_COLOR = "#181b23"
 SURFACE_ELEVATED = "#1f2633"
+
+
+def _svg_data(svg: str) -> str:
+    """Encode *svg* markup as a data URI suitable for Qt style sheets."""
+
+    return "data:image/svg+xml;charset=utf-8," + quote(svg)
+
+
+SPINBOX_UP_ARROW_DEFAULT = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='#f4f6fb' fill-opacity='0.75' d='M6 1.4 10 5.4 8.9 6.5 6 3.7 3.1 6.5 2 5.4z'/>"
+    "</svg>"
+)
+SPINBOX_UP_ARROW_ACCENT = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='{accent}' d='M6 1.4 10 5.4 8.9 6.5 6 3.7 3.1 6.5 2 5.4z'/>"
+    "</svg>".format(accent=ACCENT_COLOR)
+)
+SPINBOX_UP_ARROW_DISABLED = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='#9aa3c6' fill-opacity='0.35' d='M6 1.4 10 5.4 8.9 6.5 6 3.7 3.1 6.5 2 5.4z'/>"
+    "</svg>"
+)
+SPINBOX_DOWN_ARROW_DEFAULT = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='#f4f6fb' fill-opacity='0.75' d='M2 2.6 3.1 1.5 6 4.3 8.9 1.5 10 2.6 6 6.6z'/>"
+    "</svg>"
+)
+SPINBOX_DOWN_ARROW_ACCENT = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='{accent}' d='M2 2.6 3.1 1.5 6 4.3 8.9 1.5 10 2.6 6 6.6z'/>"
+    "</svg>".format(accent=ACCENT_COLOR)
+)
+SPINBOX_DOWN_ARROW_DISABLED = _svg_data(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'>"
+    "<path fill='#9aa3c6' fill-opacity='0.35' d='M2 2.6 3.1 1.5 6 4.3 8.9 1.5 10 2.6 6 6.6z'/>"
+    "</svg>"
+)
 SCAN_PHASE1_COLOR = "#5A73FF"
 SCAN_PHASE2_COLOR = "#9E6FFF"
 SCAN_PHASE_HEADER_COLOR = "#A5D6FF"
@@ -296,15 +336,92 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
-    background-color: rgba(10, 12, 18, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+QLineEdit, QComboBox {{
+    background-color: rgba(26, 30, 43, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    padding: 6px 10px;
+    padding: 6px 12px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
-    border-color: {accent};
+QSpinBox {{
+    background-color: #1b1f2d;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px 12px;
+    padding-right: 46px;
+    color: #f4f6fb;
+    selection-background-color: rgba(94, 129, 255, 0.28);
+}}
+QLineEdit:focus, QComboBox:focus {{
+    border: 1px solid rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:focus {{
+    border: 1px solid rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:disabled {{
+    color: rgba(244, 246, 251, 0.4);
+    border-color: rgba(255, 255, 255, 0.03);
+}}
+QSpinBox::up-button,
+QSpinBox::down-button {{
+    subcontrol-origin: padding;
+    width: 34px;
+    margin: 1px;
+    padding: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.02);
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    height: 50%;
+    border-top-right-radius: 7px;
+    border-bottom-right-radius: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    height: 50%;
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 7px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}}
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+}}
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed {{
+    background-color: rgba(94, 129, 255, 0.22);
+    border-left: 1px solid rgba(0, 0, 0, 0.4);
+}}
+QSpinBox::up-button:disabled,
+QSpinBox::down-button:disabled {{
+    background-color: rgba(255, 255, 255, 0.015);
+    border-left: 1px solid rgba(255, 255, 255, 0.03);
+}}
+QSpinBox::up-arrow {{
+    width: 12px;
+    height: 8px;
+    image: url({spin_up_default});
+}}
+QSpinBox::up-arrow:hover,
+QSpinBox::up-arrow:pressed {{
+    image: url({spin_up_hover});
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url({spin_up_disabled});
+}}
+QSpinBox::down-arrow {{
+    width: 12px;
+    height: 8px;
+    image: url({spin_down_default});
+}}
+QSpinBox::down-arrow:hover,
+QSpinBox::down-arrow:pressed {{
+    image: url({spin_down_hover});
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url({spin_down_disabled});
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
@@ -935,6 +1052,12 @@ class MainWindow(QMainWindow):
                 accent=ACCENT_COLOR,
                 accent_hover=ACCENT_COLOR_HOVER,
                 surface=SURFACE_COLOR,
+                spin_up_default=SPINBOX_UP_ARROW_DEFAULT,
+                spin_up_hover=SPINBOX_UP_ARROW_ACCENT,
+                spin_up_disabled=SPINBOX_UP_ARROW_DISABLED,
+                spin_down_default=SPINBOX_DOWN_ARROW_DEFAULT,
+                spin_down_hover=SPINBOX_DOWN_ARROW_ACCENT,
+                spin_down_disabled=SPINBOX_DOWN_ARROW_DISABLED,
             )
         )
 
@@ -1092,6 +1215,19 @@ class MainWindow(QMainWindow):
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
+
+        spin_configs = (
+            (self.diff_min, 88),
+            (self.diff_max, 88),
+            (self.spin_artist_limit, 104),
+            (self.spin_exclude_short_songs, 156),
+            (self.spin_exclude_long_charts, 156),
+            (self.spin_min_diff, 104),
+            (self.spin_tiers, 120),
+            (self.spin_songs_per, 120),
+        )
+        for spin_widget, minimum_width in spin_configs:
+            self._configure_spinbox(spin_widget, minimum_width)
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["None (Custom Tier Names)"] + list(THEME_SETS.keys()) + ["Procedural - Rock Tour"])
@@ -1403,6 +1539,15 @@ class MainWindow(QMainWindow):
             event.accept()
             return
         super().keyPressEvent(event)
+
+    def _configure_spinbox(self, spin: QSpinBox, minimum_width: int) -> None:
+        """Align spin box content and reserve space for the vertical button column."""
+
+        spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        spin.setLayoutDirection(Qt.LeftToRight)
+        spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+        if minimum_width:
+            spin.setMinimumWidth(minimum_width)
 
     def _lower_official_enabled(self) -> bool:
         """Return whether official Harmonix/Neversoft charts should be adjusted."""
