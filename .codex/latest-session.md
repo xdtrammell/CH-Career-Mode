@@ -787,3 +787,23 @@ They described permanent highlights after the context menu work and asked for li
 The event filter now clears selections whenever the user clicks outside the lists or on empty list space, while right-clicks explicitly select their item before opening the context menu, ensuring drag-and-drop and context actions continue to work with single-selection semantics.
 
 ---
+# Session 35 — 2025-10-16 06:48
+
+## Topic
+Refresh QSpinBox visuals and behavior to deliver consistent, modern controls.
+
+## User Desires
+The user wanted every spin box in the app to feel intuitive and polished with clear vertical arrows, hover feedback, and styling that matches the dark theme without ever inverting increment/decrement behavior.
+
+## Specifics of User Desires
+They specified vertically stacked arrows that always increase on top and decrease on bottom, accented hover/pressed states, chevron icons, rounded corners with subtle borders, preserved keyboard/scroll directionality, and suffix text with spacing that never collides with the arrow column.
+
+## Actions Taken
+- Expanded `gui.py — APP_STYLE_TEMPLATE` with a dedicated QSpinBox stylesheet, including data-URI chevron assets, hover/pressed feedback, focus borders, and reserved right padding for the arrow column.
+- Added `gui.py — MainWindow._polish_spinbox` to standardize alignment, arrow layout, sizing, and acceleration, and applied it to every spin box constructed in `MainWindow.__init__`.
+- Ensured suffix-bearing spin boxes receive wider minimum widths so values like "300 minutes" remain readable and verified the module compiles via `python -m compileall ch_career_mode`.
+
+## Helpful Hints
+Use `_polish_spinbox` whenever adding new spin boxes so they inherit the unified styling, and remember the style template now expects the chevron data URI constants when formatting `APP_STYLE_TEMPLATE`.
+
+---

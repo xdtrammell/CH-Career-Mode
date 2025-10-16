@@ -59,6 +59,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QStackedWidget,
     QMenu,
+    QAbstractSpinBox,
 )
 import shiboken6
 
@@ -215,6 +216,37 @@ SCAN_COMPLETE = "complete"
 SCAN_CANCELLED = "cancelled"
 SCAN_ERROR = "error"
 
+SPIN_UP_ARROW = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%207%208%203%2013%207%27%20fill%3D%27none%27%20stroke%3D%27%23f4f6fb%27%20stroke-opacity%3D%270.75%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+SPIN_UP_ARROW_HOVER = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%207%208%203%2013%207%27%20fill%3D%27none%27%20stroke%3D%27%235e81ff%27%20stroke-opacity%3D%271.0%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+SPIN_UP_ARROW_DISABLED = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%207%208%203%2013%207%27%20fill%3D%27none%27%20stroke%3D%27%23f4f6fb%27%20stroke-opacity%3D%270.35%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+SPIN_DOWN_ARROW = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%203%208%207%2013%203%27%20fill%3D%27none%27%20stroke%3D%27%23f4f6fb%27%20stroke-opacity%3D%270.75%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+SPIN_DOWN_ARROW_HOVER = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%203%208%207%2013%203%27%20fill%3D%27none%27%20stroke%3D%27%235e81ff%27%20stroke-opacity%3D%271.0%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+SPIN_DOWN_ARROW_DISABLED = (
+    "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%2016%2010%27%3E%3Cpolyline%20"
+    "points%3D%273%203%208%207%2013%203%27%20fill%3D%27none%27%20stroke%3D%27%23f4f6fb%27%20stroke-opacity%3D%270.35%27%20stroke-"
+    "width%3D%271.6%27%20stroke-linecap%3D%27round%27%20stroke-linejoin%3D%27round%27/%3E%3C/svg%3E"
+)
+
 APP_STYLE_TEMPLATE = """
 QMainWindow {{
     background-color: #0f1118;
@@ -296,19 +328,87 @@ QPushButton[class~="accent"]:hover {{
     background-color: {accent_hover};
 }}
 
-QLineEdit, QComboBox, QSpinBox {{
+QLineEdit, QComboBox {{
     background-color: rgba(10, 12, 18, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 8px;
     padding: 6px 10px;
     color: #f4f6fb;
 }}
-QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
-    border-color: {accent};
+QLineEdit:focus, QComboBox:focus {{
+    border-color: rgba(94, 129, 255, 0.6);
 }}
 QComboBox QAbstractItemView {{
     background-color: #141823;
     selection-background-color: {accent};
+}}
+
+QSpinBox {{
+    background-color: #1a1e2b;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 6px;
+    padding-right: 44px;
+    color: #f4f6fb;
+    selection-background-color: rgba(94, 129, 255, 0.35);
+}}
+QSpinBox:focus {{
+    border: 1px solid rgba(94, 129, 255, 0.6);
+}}
+QSpinBox:disabled {{
+    color: rgba(244, 246, 251, 0.35);
+    background-color: rgba(26, 30, 43, 0.4);
+    border-color: rgba(255, 255, 255, 0.03);
+}}
+QSpinBox::up-button, QSpinBox::down-button {{
+    subcontrol-origin: border;
+    width: 32px;
+    background-color: transparent;
+    border: none;
+}}
+QSpinBox::up-button {{
+    subcontrol-position: top right;
+    border-top-right-radius: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 1px 1px 0 0;
+}}
+QSpinBox::down-button {{
+    subcontrol-position: bottom right;
+    border-bottom-right-radius: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin: 0 1px 1px 0;
+}}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background-color: rgba(94, 129, 255, 0.15);
+    border-left-color: rgba(94, 129, 255, 0.25);
+}}
+QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{
+    background-color: rgba(0, 0, 0, 0.4);
+    border-left-color: rgba(94, 129, 255, 0.3);
+}}
+QSpinBox::up-arrow {{
+    width: 16px;
+    height: 10px;
+    image: url({spin_up_arrow});
+}}
+QSpinBox::up-arrow:hover, QSpinBox::up-arrow:pressed {{
+    image: url({spin_up_arrow_hover});
+}}
+QSpinBox::up-arrow:disabled {{
+    image: url({spin_up_arrow_disabled});
+}}
+QSpinBox::down-arrow {{
+    width: 16px;
+    height: 10px;
+    image: url({spin_down_arrow});
+}}
+QSpinBox::down-arrow:hover, QSpinBox::down-arrow:pressed {{
+    image: url({spin_down_arrow_hover});
+}}
+QSpinBox::down-arrow:disabled {{
+    image: url({spin_down_arrow_disabled});
 }}
 
 QCheckBox {{
@@ -935,6 +1035,12 @@ class MainWindow(QMainWindow):
                 accent=ACCENT_COLOR,
                 accent_hover=ACCENT_COLOR_HOVER,
                 surface=SURFACE_COLOR,
+                spin_up_arrow=SPIN_UP_ARROW,
+                spin_up_arrow_hover=SPIN_UP_ARROW_HOVER,
+                spin_up_arrow_disabled=SPIN_UP_ARROW_DISABLED,
+                spin_down_arrow=SPIN_DOWN_ARROW,
+                spin_down_arrow_hover=SPIN_DOWN_ARROW_HOVER,
+                spin_down_arrow_disabled=SPIN_DOWN_ARROW_DISABLED,
             )
         )
 
@@ -995,9 +1101,11 @@ class MainWindow(QMainWindow):
         self.diff_min = QSpinBox()
         self.diff_min.setRange(0, 9)
         self.diff_min.setValue(0)
+        self._polish_spinbox(self.diff_min, 88)
         self.diff_max = QSpinBox()
         self.diff_max.setRange(0, 9)
         self.diff_max.setValue(9)
+        self._polish_spinbox(self.diff_max, 88)
 
         self.chk_longrule = QCheckBox("Keep >7:00 out of first two tiers")
         self.chk_longrule.setChecked(True)
@@ -1018,11 +1126,13 @@ class MainWindow(QMainWindow):
         self.spin_artist_limit = QSpinBox()
         self.spin_artist_limit.setRange(1, 10)
         self.spin_artist_limit.setValue(max(1, min(10, saved_artist_limit)))
+        self._polish_spinbox(self.spin_artist_limit, 104)
 
         self.spin_exclude_short_songs = QSpinBox()
         self.spin_exclude_short_songs.setRange(5, 600)
         self.spin_exclude_short_songs.setSingleStep(5)
         self.spin_exclude_short_songs.setToolTip("Useful for skipping extremely short joke charts or fragments.")
+        self._polish_spinbox(self.spin_exclude_short_songs, 160)
         default_short_seconds = 30
         raw_short_setting = self.settings.value("exclude_short_songs_seconds", default_short_seconds)
         has_short_setting = self.settings.contains("exclude_short_songs_seconds")
@@ -1053,10 +1163,12 @@ class MainWindow(QMainWindow):
         self.spin_exclude_long_charts.setValue(stored_exclude_minutes)
         self.spin_exclude_long_charts.setToolTip("Useful for filtering out full-length concerts or movie charts.")
         self.spin_exclude_long_charts.setSuffix(" minutes")
+        self._polish_spinbox(self.spin_exclude_long_charts, 170)
         self.spin_min_diff = QSpinBox()
         self.spin_min_diff.setRange(1, 5)
         saved_min_diff = int(self.settings.value("min_difficulty", 1)) if self.settings.contains("min_difficulty") else 1
         self.spin_min_diff.setValue(max(1, min(5, saved_min_diff)))
+        self._polish_spinbox(self.spin_min_diff, 104)
 
         self.folder_status_indicator = QLabel()
         self.folder_status_indicator.setFixedSize(12, 12)
@@ -1088,9 +1200,11 @@ class MainWindow(QMainWindow):
         clamped_tier_count = max(1, min(20, stored_tier_count))
         self.spin_tiers.setValue(clamped_tier_count)
         self.settings.setValue("tier_count", clamped_tier_count)
+        self._polish_spinbox(self.spin_tiers, 120)
         self.spin_songs_per = QSpinBox()
         self.spin_songs_per.setRange(1, 10)
         self.spin_songs_per.setValue(5)
+        self._polish_spinbox(self.spin_songs_per, 120)
         self.spin_songs_per.valueChanged.connect(lambda _=None: self._sync_all_tier_heights())
 
         self.theme_combo = QComboBox()
@@ -1942,6 +2056,16 @@ class MainWindow(QMainWindow):
         self.settings.setValue("tier_count", value)
         self._regenerate_tier_names(procedural_refresh=self._is_procedural_theme())
         self._rebuild_tier_widgets()
+
+    def _polish_spinbox(self, spin: QSpinBox, minimum_width: Optional[int] = None) -> None:
+        """Normalize spin box alignment, arrow layout, and minimum sizing."""
+
+        spin.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        spin.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
+        spin.setAccelerated(True)
+        spin.setMinimumHeight(32)
+        if minimum_width is not None:
+            spin.setMinimumWidth(minimum_width)
 
     def _apply_compact_list_style(self, widget: QListWidget, variant: str = "library") -> CompactItemDelegate:
         """Attach the compact delegate and configure shared list settings."""
